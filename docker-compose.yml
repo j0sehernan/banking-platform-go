@@ -1,0 +1,273 @@
+# banking-platform-go
+# Levanta TODO el sistema con un solo comando: `docker compose up`.
+#
+# Componentes:
+#   - kafka (Apache Kafka 3.9 en KRaft mode, sin Zookeeper)
+#   - kafka-init (job one-shot que crea los topics)
+#   - kafka-ui (provectus, http://localhost:8080 para inspeccionar el bus)
+#   - 3 Postgres independientes (uno por microservicio)
+#   - 3 jobs de migrate (one-shot, aplican migrations al arrancar)
+#   - 3 microservicios Go
+#   - frontend Next.js
+#
+# Para ver los logs de todo: docker compose logs -f
+# Para limpiar todo (incluyendo data): docker compose down -v
+
+services:
+
+  # ============================================================
+  # BUS DE EVENTOS
+  # ============================================================
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: bp-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # Single-node KRaft (sin Zookeeper)
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      # Listeners: el interno (intra-network) escucha en kafka:9092 y el externo
+      # (host) en localhost:9092. Ambos se anuncian para que cada cliente use el correcto.
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  kafka-init:
+    # Job one-shot: crea los topics y termina. Los servicios que necesitan
+    # los topics dependen de este job vía service_completed_successfully.
+    image: apache/kafka:3.9.0
+    container_name: bp-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "Creating topics..."
+        for topic in accounts.events transactions.commands accounts.tx-results transactions.events dlq; do
+          /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
+            --topic $$topic --partitions 3 --replication-factor 1 \
+            --bootstrap-server kafka:29092
+        done
+        echo "Topics created:"
+        /opt/kafka/bin/kafka-topics.sh --list --bootstrap-server kafka:29092
+    restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: bp-kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: banking-platform
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      DYNAMIC_CONFIG_ENABLED: "true"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ============================================================
+  # DATABASES (1 por microservicio - principio de DB por servicio)
+  # ============================================================
+
+  accounts-db:
+    image: postgres:16-alpine
+    container_name: bp-accounts-db
+    environment:
+      POSTGRES_DB: accounts
+      POSTGRES_USER: accounts
+      POSTGRES_PASSWORD: accounts
+    ports:
+      - "5433:5432"
+    volumes:
+      - accounts-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accounts"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  transactions-db:
+    image: postgres:16-alpine
+    container_name: bp-transactions-db
+    environment:
+      POSTGRES_DB: transactions
+      POSTGRES_USER: transactions
+      POSTGRES_PASSWORD: transactions
+    ports:
+      - "5434:5432"
+    volumes:
+      - transactions-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transactions"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  llm-db:
+    image: postgres:16-alpine
+    container_name: bp-llm-db
+    environment:
+      POSTGRES_DB: llm
+      POSTGRES_USER: llm
+      POSTGRES_PASSWORD: llm
+    ports:
+      - "5435:5432"
+    volumes:
+      - llm-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llm"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================
+  # MIGRATIONS (one-shot jobs, esperan a las DBs)
+  # ============================================================
+
+  accounts-migrate:
+    image: migrate/migrate:v4.18.1
+    container_name: bp-accounts-migrate
+    volumes:
+      - ./services/accounts-ms/migrations:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://accounts:accounts@accounts-db:5432/accounts?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      accounts-db:
+        condition: service_healthy
+    restart: on-failure
+
+  transactions-migrate:
+    image: migrate/migrate:v4.18.1
+    container_name: bp-transactions-migrate
+    volumes:
+      - ./services/transactions-ms/migrations:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://transactions:transactions@transactions-db:5432/transactions?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      transactions-db:
+        condition: service_healthy
+    restart: on-failure
+
+  llm-migrate:
+    image: migrate/migrate:v4.18.1
+    container_name: bp-llm-migrate
+    volumes:
+      - ./services/llm-ms/migrations:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgres://llm:llm@llm-db:5432/llm?sslmode=disable",
+      "up"
+    ]
+    depends_on:
+      llm-db:
+        condition: service_healthy
+    restart: on-failure
+
+  # ============================================================
+  # MICROSERVICIOS GO
+  # ============================================================
+
+  accounts-ms:
+    build:
+      context: .
+      dockerfile: services/accounts-ms/Dockerfile
+    container_name: bp-accounts-ms
+    ports:
+      - "8081:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://accounts:accounts@accounts-db:5432/accounts?sslmode=disable
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      accounts-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+
+  transactions-ms:
+    build:
+      context: .
+      dockerfile: services/transactions-ms/Dockerfile
+    container_name: bp-transactions-ms
+    ports:
+      - "8082:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://transactions:transactions@transactions-db:5432/transactions?sslmode=disable
+      KAFKA_BROKERS: kafka:29092
+    depends_on:
+      transactions-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+
+  llm-ms:
+    build:
+      context: .
+      dockerfile: services/llm-ms/Dockerfile
+    container_name: bp-llm-ms
+    ports:
+      - "8083:8080"
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://llm:llm@llm-db:5432/llm?sslmode=disable
+      KAFKA_BROKERS: kafka:29092
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-haiku-4-5}
+    depends_on:
+      llm-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+
+  # ============================================================
+  # FRONTEND
+  # ============================================================
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: bp-web
+    ports:
+      - "3000:3000"
+    environment:
+      # Las URLs son las del browser host, no de la red interna
+      NEXT_PUBLIC_ACCOUNTS_API: http://localhost:8081
+      NEXT_PUBLIC_TRANSACTIONS_API: http://localhost:8082
+      NEXT_PUBLIC_LLM_API: http://localhost:8083
+    depends_on:
+      - accounts-ms
+      - transactions-ms
+      - llm-ms
+
+volumes:
+  accounts-data:
+  transactions-data:
+  llm-data:

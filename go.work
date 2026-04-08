@@ -1,0 +1,10 @@
+go 1.23.0
+
+toolchain go1.23.1
+
+use (
+	./pkg
+	./services/accounts-ms
+	./services/llm-ms
+	./services/transactions-ms
+)
