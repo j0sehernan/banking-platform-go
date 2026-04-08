@@ -60,6 +60,25 @@ func (h *Handler) GetClient(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// ListClients GET /clients
+func (h *Handler) ListClients(w http.ResponseWriter, r *http.Request) error {
+	clients, err := h.svc.ListClients(r.Context())
+	if err != nil {
+		return err
+	}
+	resp := make([]ClientResponse, 0, len(clients))
+	for _, c := range clients {
+		resp = append(resp, ClientResponse{
+			ID:        c.ID.String(),
+			Name:      c.Name,
+			Email:     c.Email,
+			CreatedAt: c.CreatedAt,
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, resp)
+	return nil
+}
+
 // CreateAccount POST /accounts
 func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) error {
 	var req CreateAccountRequest

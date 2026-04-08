@@ -29,6 +29,7 @@ func NewRouter(h *Handler, logger *slog.Logger) http.Handler {
 
 	// API routes
 	r.Post("/clients", httpx.Wrap(h.CreateClient))
+	r.Get("/clients", httpx.Wrap(h.ListClients))
 	r.Get("/clients/{id}", httpx.Wrap(h.GetClient))
 
 	r.Post("/accounts", httpx.Wrap(h.CreateAccount))

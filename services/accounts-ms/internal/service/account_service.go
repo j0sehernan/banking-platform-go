@@ -128,6 +128,12 @@ func (s *AccountService) GetClient(ctx context.Context, id string) (*domain.Clie
 	return repo.GetByID(ctx, id)
 }
 
+// ListClients returns the latest clients.
+func (s *AccountService) ListClients(ctx context.Context) ([]domain.Client, error) {
+	repo := newClientRepoPool(s.pool)
+	return repo.ListAll(ctx)
+}
+
 // ListAccountsByClient returns the accounts of a client.
 func (s *AccountService) ListAccountsByClient(ctx context.Context, clientID uuid.UUID) ([]domain.Account, error) {
 	repo := newAccountRepoPool(s.pool)

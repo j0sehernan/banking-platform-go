@@ -56,3 +56,24 @@ func (r *ClientRepo) GetByID(ctx context.Context, id string) (*domain.Client, er
 	}
 	return &c, nil
 }
+
+// ListAll returns the latest 100 clients ordered by creation date desc.
+func (r *ClientRepo) ListAll(ctx context.Context) ([]domain.Client, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT id, name, email, created_at FROM clients ORDER BY created_at DESC LIMIT 100`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clients []domain.Client
+	for rows.Next() {
+		var c domain.Client
+		if err := rows.Scan(&c.ID, &c.Name, &c.Email, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		clients = append(clients, c)
+	}
+	return clients, rows.Err()
+}

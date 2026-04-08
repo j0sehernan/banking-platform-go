@@ -123,6 +123,12 @@ export const accountsApi = {
     return res.json();
   },
 
+  listClients: async (): Promise<Client[]> => {
+    const res = await trackedFetch(`${ACCOUNTS}/clients`);
+    if (!res.ok) throw await asError(res);
+    return res.json();
+  },
+
   createAccount: async (data: { client_id: string; currency: string }): Promise<Account> => {
     const res = await trackedFetch(`${ACCOUNTS}/accounts`, {
       method: 'POST',

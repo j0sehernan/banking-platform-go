@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { accountsApi, transactionsApi, Account, Transaction } from '@/lib/api';
+import { accountsApi, transactionsApi, Account, Client, Transaction } from '@/lib/api';
 
 export default function HomePage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -180,10 +180,24 @@ function NewClientModal({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 function NewAccountModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [clients, setClients] = useState<Client[]>([]);
   const [clientID, setClientID] = useState('');
   const [currency, setCurrency] = useState('USD');
+  const [loadingClients, setLoadingClients] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    accountsApi
+      .listClients()
+      .then((list) => {
+        const items = list || [];
+        setClients(items);
+        if (items.length > 0) setClientID(items[0].id);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Error loading clients'))
+      .finally(() => setLoadingClients(false));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -203,7 +217,29 @@ function NewAccountModal({ onClose, onCreated }: { onClose: () => void; onCreate
   return (
     <Modal onClose={onClose} title="New account">
       <form onSubmit={submit} className="space-y-3">
-        <Input label="Client ID (UUID)" value={clientID} onChange={setClientID} required />
+        <div>
+          <label className="text-xs font-medium text-slate-700">Client</label>
+          {loadingClients ? (
+            <div className="text-xs text-slate-500 mt-1">Loading clients...</div>
+          ) : clients.length === 0 ? (
+            <div className="text-xs text-slate-500 mt-1">
+              No clients yet. Create one first with the <span className="font-semibold">+ Client</span> button.
+            </div>
+          ) : (
+            <select
+              value={clientID}
+              onChange={(e) => setClientID(e.target.value)}
+              required
+              className="w-full mt-1 border border-slate-300 rounded px-3 py-2 text-sm"
+            >
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} — {c.email}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div>
           <label className="text-xs font-medium text-slate-700">Currency</label>
           <select
@@ -219,7 +255,7 @@ function NewAccountModal({ onClose, onCreated }: { onClose: () => void; onCreate
         {error && <div className="text-red-600 text-xs">{error}</div>}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || clients.length === 0}
           className="w-full bg-emerald-600 text-white rounded py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
         >
           {submitting ? 'Creating...' : 'Create account'}
