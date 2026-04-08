@@ -344,6 +344,22 @@ SSE (Server-Sent Events) is simpler than WebSockets for unidirectional server→
 ### Kafka UI instead of a custom "debug stream" endpoint
 At first I considered making a `/debug/events` endpoint in each microservice so the front would show Kafka events live in its panel. I dropped it: Kafka UI (provectus) already exists, is free, professional, does that and much more without writing a single line of custom code. The front panel sticks to HTTP requests and SSE chunks; Kafka UI takes care of bus inspection.
 
+### Migrations as separate one-shot containers (not embedded in the microservices)
+There are two common ways to run DB migrations in a Dockerized setup:
+
+1. **Embedded**: each microservice imports `golang-migrate` as a library and applies pending migrations inside `main()` before starting the HTTP server. This is what Spring Boot + Flyway does by default and what most Go tutorials show.
+2. **Separate one-shot jobs** ✅ (what this repo does): a dedicated `*-migrate` container per service runs the migrations and exits. The microservice starts only after the migrate container exits with code 0 (via `depends_on: condition: service_completed_successfully`).
+
+I chose option 2 for these reasons:
+
+- **Matches the Kubernetes production pattern**: in k8s this same setup becomes a `Job` or an `initContainer`. Doing it the same way locally keeps parity with how it would run in prod.
+- **Separation of concerns**: the microservice container only runs business logic. It doesn't need to know anything about DDL, schema files, or migration state.
+- **Principle of least privilege**: in production the microservice can connect with a DB user that only has `SELECT/INSERT/UPDATE/DELETE`. The migrate container uses its own user with `CREATE/ALTER/DROP`. The embedded approach forces the ms to hold DDL privileges at runtime, which is strictly worse from a security standpoint.
+- **Idempotency with replicas**: with N replicas of the ms, the embedded approach would trigger N concurrent migration attempts at startup (needs advisory locks to be safe). A single one-shot job runs once, independently of the replica count.
+- **Explicit rollback**: to roll back a schema change in production, we run `migrate down` as a standalone job without redeploying the microservice.
+
+The trade-off is that `docker compose ps` shows 4 extra "Exited" containers (one `kafka-init` and three `*-migrate`). They are one-shot jobs that did their work at startup and exited successfully — not failures. For a small project with a single replica, the embedded approach would also be valid and slightly simpler; I went with this one because it demonstrates the production-ready pattern.
+
 ## Repo structure
 
 ```
