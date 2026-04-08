@@ -8,8 +8,8 @@ import (
 	"github.com/j0sehernan/banking-platform-go/pkg/outbox"
 )
 
-// OutboxRepo implementa pkg/outbox.Repository para Postgres.
-// La idea es que el worker genérico de pkg/outbox no conozca pgx.
+// OutboxRepo implements pkg/outbox.Repository for Postgres.
+// The idea is that the generic worker in pkg/outbox doesn't know about pgx.
 type OutboxRepo struct {
 	db DBTX
 }
@@ -18,8 +18,8 @@ func NewOutboxRepo(db DBTX) *OutboxRepo {
 	return &OutboxRepo{db: db}
 }
 
-// Insert agrega una fila al outbox dentro de una transacción.
-// Lo llaman los services al hacer cambios de estado, en la misma tx.
+// Insert adds a row to the outbox inside a transaction.
+// Called by services when changing state, in the same tx.
 func (r *OutboxRepo) Insert(ctx context.Context, topic, key string, payload []byte, headers map[string]string) error {
 	hdrJSON, _ := json.Marshal(headers)
 	_, err := r.db.Exec(ctx,
@@ -30,10 +30,10 @@ func (r *OutboxRepo) Insert(ctx context.Context, topic, key string, payload []by
 	return err
 }
 
-// FetchPending lee filas pendientes del outbox usando FOR UPDATE SKIP LOCKED.
-// SKIP LOCKED es la salsa secreta para que múltiples workers (o réplicas
-// del mismo servicio) puedan correr en paralelo sin pisarse: cada uno
-// agarra filas distintas.
+// FetchPending reads pending outbox rows using FOR UPDATE SKIP LOCKED.
+// SKIP LOCKED is the secret sauce to allow multiple workers (or service
+// replicas) to run in parallel without stepping on each other: each one
+// grabs different rows.
 func (r *OutboxRepo) FetchPending(ctx context.Context, limit int) ([]outbox.Row, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, topic, msg_key, payload, COALESCE(headers, '{}'::jsonb)
@@ -76,7 +76,7 @@ func (r *OutboxRepo) FetchPending(ctx context.Context, limit int) ([]outbox.Row,
 	return result, rows.Err()
 }
 
-// MarkPublished marca filas como publicadas después de enviarlas a Kafka.
+// MarkPublished marks rows as published after sending them to Kafka.
 func (r *OutboxRepo) MarkPublished(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {
 		return nil

@@ -43,7 +43,7 @@ func (h *Handler) CreateClient(w http.ResponseWriter, r *http.Request) error {
 func (h *Handler) GetClient(w http.ResponseWriter, r *http.Request) error {
 	id := chi.URLParam(r, "id")
 	if _, err := uuid.Parse(id); err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 
 	client, err := h.svc.GetClient(r.Context(), id)
@@ -67,7 +67,7 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	clientID, _ := uuid.Parse(req.ClientID) // ya validado por validator
+	clientID, _ := uuid.Parse(req.ClientID) // already validated by validator
 	acc, err := h.svc.CreateAccount(r.Context(), clientID, req.Currency)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func (h *Handler) CreateAccount(w http.ResponseWriter, r *http.Request) error {
 func (h *Handler) GetAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 
 	acc, err := h.svc.GetAccount(r.Context(), id)
@@ -96,7 +96,7 @@ func (h *Handler) GetAccount(w http.ResponseWriter, r *http.Request) error {
 func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 
 	acc, err := h.svc.GetAccount(r.Context(), id)

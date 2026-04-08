@@ -13,7 +13,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
   useEffect(() => {
     transactionsApi.get(id).then(setTx).catch(console.error);
-    // pollea la explicación: el llm-ms tarda 1-2s en generarla tras el evento
+    // poll for the explanation: llm-ms takes 1-2s to generate it after the event
     const interval = setInterval(async () => {
       const exp = await llmApi.getExplanation(id);
       if (exp) {
@@ -25,16 +25,16 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
   }, [id]);
 
   if (!tx) {
-    return <div className="p-6 text-slate-500">Cargando...</div>;
+    return <div className="p-6 text-slate-500">Loading...</div>;
   }
 
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-sm text-slate-500 hover:text-slate-900">
-          ← Volver
+          ← Back
         </Link>
-        <h1 className="text-2xl font-bold">Detalle de transacción</h1>
+        <h1 className="text-2xl font-bold">Transaction detail</h1>
       </header>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
@@ -50,22 +50,22 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <div className="text-xs text-slate-500">Tipo</div>
+            <div className="text-xs text-slate-500">Type</div>
             <div className="font-medium">{tx.type}</div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Creada</div>
-            <div className="font-medium">{new Date(tx.created_at).toLocaleString('es')}</div>
+            <div className="text-xs text-slate-500">Created</div>
+            <div className="font-medium">{new Date(tx.created_at).toLocaleString('en')}</div>
           </div>
           {tx.from_account_id && (
             <div>
-              <div className="text-xs text-slate-500">Desde</div>
+              <div className="text-xs text-slate-500">From</div>
               <div className="font-mono text-xs">{tx.from_account_id}</div>
             </div>
           )}
           {tx.to_account_id && (
             <div>
-              <div className="text-xs text-slate-500">Hacia</div>
+              <div className="text-xs text-slate-500">To</div>
               <div className="font-mono text-xs">{tx.to_account_id}</div>
             </div>
           )}
@@ -73,26 +73,26 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
 
         {tx.status === 'REJECTED' && tx.rejection_msg && (
           <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800">
-            <div className="font-semibold">{tx.rejection_code || 'Rechazada'}</div>
+            <div className="font-semibold">{tx.rejection_code || 'Rejected'}</div>
             <div className="text-xs mt-1">{tx.rejection_msg}</div>
           </div>
         )}
       </div>
 
-      {/* Explicación generada por el LLM */}
+      {/* LLM-generated explanation */}
       <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl border border-purple-200 p-6">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xl">🤖</span>
-          <h2 className="font-semibold text-purple-900">Explicación generada por el LLM</h2>
+          <h2 className="font-semibold text-purple-900">LLM-generated explanation</h2>
         </div>
         {explanation ? (
           <>
             <p className="text-slate-800 leading-relaxed">{explanation.explanation}</p>
-            <div className="text-[10px] text-slate-500 mt-3 font-mono">modelo: {explanation.model}</div>
+            <div className="text-[10px] text-slate-500 mt-3 font-mono">model: {explanation.model}</div>
           </>
         ) : (
           <div className="text-sm text-slate-600 italic">
-            Generando explicación... (el llm-ms está procesando el evento desde Kafka)
+            Generating explanation... (llm-ms is processing the event from Kafka)
           </div>
         )}
       </div>
@@ -101,7 +101,7 @@ export default function TransactionDetailPage({ params }: { params: Promise<{ id
         onClick={() => setChatOpen(true)}
         className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-lg py-3 text-sm font-medium flex items-center justify-center gap-2"
       >
-        💬 Preguntar sobre esta transacción
+        💬 Ask about this transaction
       </button>
 
       {chatOpen && <TransactionChat txId={id} onClose={() => setChatOpen(false)} />}

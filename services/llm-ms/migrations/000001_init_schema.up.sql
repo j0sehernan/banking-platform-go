@@ -1,6 +1,6 @@
--- transaction_explanations: cache de las explicaciones generadas
--- automáticamente al consumir TransactionCompleted/Rejected.
--- Esto evita llamar a Claude cada vez que el front pide la explicación.
+-- transaction_explanations: cache of the explanations generated
+-- automatically when consuming TransactionCompleted/Rejected.
+-- Avoids hitting Claude every time the front asks for the explanation.
 
 CREATE TABLE transaction_explanations (
     tx_id         UUID PRIMARY KEY,
@@ -9,12 +9,12 @@ CREATE TABLE transaction_explanations (
     generated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- transactions_view: vista materializada de transacciones, alimentada
--- por los eventos de Kafka. Es lo que el chat usa para construir el
--- contexto de la transacción sin tocar a transactions-ms vía HTTP.
+-- transactions_view: materialized view of transactions, fed by Kafka
+-- events. This is what the chat uses to build the transaction context
+-- without touching transactions-ms via HTTP.
 --
--- Patrón: Materialized View / Read Model. Cada servicio mantiene los
--- datos que necesita en su propio storage, alimentado por eventos.
+-- Pattern: Materialized View / Read Model. Each service keeps the data
+-- it needs in its own storage, fed by events.
 
 CREATE TABLE transactions_view (
     id                UUID PRIMARY KEY,

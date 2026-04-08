@@ -8,10 +8,10 @@ import (
 	"github.com/j0sehernan/banking-platform-go/pkg/outbox"
 )
 
-// OutboxRepo es idéntico al de accounts-ms pero vive en su propio
-// servicio (cada ms tiene su propia DB → su propia tabla outbox).
-// Lo dejo duplicado a propósito en vez de extraer a pkg porque
-// son ~50 líneas y compartirlo agregaría acoplamiento entre ms.
+// OutboxRepo is identical to the one in accounts-ms but lives in its
+// own service (each ms has its own DB → its own outbox table).
+// I leave it duplicated on purpose instead of extracting to pkg because
+// it's ~50 lines and sharing it would add coupling between services.
 type OutboxRepo struct {
 	db DBTX
 }

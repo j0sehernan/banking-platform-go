@@ -2,8 +2,8 @@ package http
 
 import "time"
 
-// Acepto amount como string para no perder precisión decimal en la
-// serialización JSON. validator/v10 con tag `numeric` chequea formato.
+// I accept amount as string to keep decimal precision in JSON.
+// validator/v10 with the `numeric` tag checks the format.
 
 type DepositRequest struct {
 	ToAccountID    string `json:"to_account_id"   validate:"required,uuid"`

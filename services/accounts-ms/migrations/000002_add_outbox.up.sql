@@ -1,7 +1,6 @@
--- Outbox pattern: garantiza atomicidad DB+evento sin 2PC.
--- Las inserciones a esta tabla ocurren en la misma transacción
--- que el cambio de estado del dominio. Un worker en background
--- las lee y las publica a Kafka.
+-- Outbox pattern: guarantees DB+event atomicity without 2PC.
+-- Inserts to this table happen in the same transaction as the domain
+-- state change. A background worker reads them and publishes to Kafka.
 
 CREATE TABLE outbox (
     id            UUID PRIMARY KEY,
@@ -13,7 +12,7 @@ CREATE TABLE outbox (
     published_at  TIMESTAMPTZ
 );
 
--- Índice parcial: solo eventos pendientes (más eficiente que un índice completo).
+-- Partial index: only pending events (more efficient than a full index).
 CREATE INDEX idx_outbox_unpublished
     ON outbox(created_at)
     WHERE published_at IS NULL;

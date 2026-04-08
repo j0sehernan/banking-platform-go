@@ -21,11 +21,11 @@ func NewHandler(svc *service.LLMService) *Handler {
 }
 
 // GetExplanation GET /transactions/{id}/explanation
-// Devuelve la explicación cacheada generada al consumir el evento.
+// Returns the cached explanation generated when consuming the event.
 func (h *Handler) GetExplanation(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 
 	exp, err := h.svc.GetExplanation(r.Context(), id)
@@ -43,13 +43,13 @@ func (h *Handler) GetExplanation(w http.ResponseWriter, r *http.Request) error {
 
 // Chat POST /chat
 //
-// Endpoint con streaming SSE. El front envía el contexto (tx_id) y el
-// historial de mensajes; el backend lee la transacción de su vista
-// materializada local, construye el system prompt con context grounding,
-// y proxea el stream de Claude al cliente vía SSE.
+// Endpoint with SSE streaming. The front sends the context (tx_id) and
+// the message history; the backend reads the transaction from its local
+// materialized view, builds the system prompt with context grounding,
+// and proxies Claude's stream to the client via SSE.
 //
-// Esta función NO usa httpx.Wrap porque escribe headers manualmente
-// (Content-Type: text/event-stream) antes de cualquier WriteJSON.
+// This function does NOT use httpx.Wrap because it writes headers
+// manually (Content-Type: text/event-stream) before any WriteJSON.
 func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	var req ChatRequest
 	if err := httpx.DecodeAndValidate(r, &req); err != nil {
@@ -57,7 +57,7 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txID, _ := uuid.Parse(req.TxID) // ya validado por validator
+	txID, _ := uuid.Parse(req.TxID) // already validated by validator
 
 	view, err := h.svc.GetTransactionView(r.Context(), txID)
 	if err != nil {
@@ -71,11 +71,11 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Headers SSE
+	// SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // deshabilita buffering en proxies
+	w.Header().Set("X-Accel-Buffering", "no") // disables buffering on proxies
 	w.WriteHeader(http.StatusOK)
 
 	stream, err := h.svc.ChatStream(r.Context(), view, req.Messages)
@@ -103,20 +103,20 @@ func (h *Handler) Chat(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// writeSSEData escribe un evento SSE default con `data: ...`.
-// El JSON-escape simple es suficiente para texto plano.
+// writeSSEData writes a default SSE event with `data: ...`.
+// Simple JSON escaping is enough for plain text.
 func writeSSEData(w http.ResponseWriter, text string) {
-	// Escapamos el texto a JSON para que las quotes y newlines no rompan el formato SSE
+	// Escape the text to JSON so quotes and newlines don't break SSE format
 	escaped := jsonEscapeString(text)
 	fmt.Fprintf(w, "data: {\"text\":%s}\n\n", escaped)
 }
 
-// writeSSEEvent escribe un evento SSE con nombre custom (event: name).
+// writeSSEEvent writes an SSE event with a custom name (event: name).
 func writeSSEEvent(w http.ResponseWriter, name, data string) {
 	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", name, data)
 }
 
-// jsonEscapeString convierte un string a su representación JSON con quotes.
+// jsonEscapeString turns a string into its JSON representation with quotes.
 func jsonEscapeString(s string) string {
 	var b []byte
 	b = append(b, '"')

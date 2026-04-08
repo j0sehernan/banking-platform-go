@@ -15,11 +15,12 @@ func NewProcessedEventsRepo(db DBTX) *ProcessedEventsRepo {
 	return &ProcessedEventsRepo{db: db}
 }
 
-// MarkProcessed intenta marcar un event_id como procesado.
-// Devuelve true si fue insertado (era nuevo), false si ya estaba (skip).
+// MarkProcessed tries to mark an event_id as processed.
+// Returns true if it was inserted (was new), false if it was already
+// there (skip).
 //
-// Esta es la pieza central del Inbox pattern: hace que los consumers
-// sean idempotentes incluso ante re-deliveries de Kafka.
+// This is the central piece of the Inbox pattern: it makes consumers
+// idempotent even when Kafka redelivers messages.
 func (r *ProcessedEventsRepo) MarkProcessed(ctx context.Context, eventID string) (bool, error) {
 	var inserted string
 	err := r.db.QueryRow(ctx,
@@ -31,7 +32,7 @@ func (r *ProcessedEventsRepo) MarkProcessed(ctx context.Context, eventID string)
 	).Scan(&inserted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// ya estaba procesado
+			// already processed
 			return false, nil
 		}
 		return false, err

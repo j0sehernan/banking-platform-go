@@ -21,8 +21,8 @@ export default function TransferPage() {
     accountsApi.listAccounts().then((accs) => setAccounts(accs || []));
   }, []);
 
-  // Polling al crear: el flujo es async (Kafka), el front pollea hasta
-  // que el estado deja de ser PENDING.
+  // Polling on create: the flow is async (Kafka), the front polls until
+  // the status leaves PENDING.
   useEffect(() => {
     if (!tx || tx.status !== 'PENDING') return;
     const id = setInterval(async () => {
@@ -83,14 +83,14 @@ export default function TransferPage() {
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-sm text-slate-500 hover:text-slate-900">
-          ← Volver
+          ← Back
         </Link>
-        <h1 className="text-2xl font-bold">Nueva transacción</h1>
+        <h1 className="text-2xl font-bold">New transaction</h1>
       </header>
 
       <form onSubmit={submit} className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
         <div>
-          <label className="text-xs font-medium text-slate-700">Tipo</label>
+          <label className="text-xs font-medium text-slate-700">Type</label>
           <div className="grid grid-cols-3 gap-2 mt-1">
             {(['TRANSFER', 'DEPOSIT', 'WITHDRAW'] as const).map((t) => (
               <button
@@ -108,15 +108,15 @@ export default function TransferPage() {
         </div>
 
         {(type === 'WITHDRAW' || type === 'TRANSFER') && (
-          <AccountSelect label="Desde" value={from} onChange={setFrom} accounts={accounts} />
+          <AccountSelect label="From" value={from} onChange={setFrom} accounts={accounts} />
         )}
         {(type === 'DEPOSIT' || type === 'TRANSFER') && (
-          <AccountSelect label="Hacia" value={to} onChange={setTo} accounts={accounts} />
+          <AccountSelect label="To" value={to} onChange={setTo} accounts={accounts} />
         )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-slate-700">Monto</label>
+            <label className="text-xs font-medium text-slate-700">Amount</label>
             <input
               type="number"
               step="0.01"
@@ -128,7 +128,7 @@ export default function TransferPage() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-700">Moneda</label>
+            <label className="text-xs font-medium text-slate-700">Currency</label>
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
@@ -148,18 +148,18 @@ export default function TransferPage() {
           disabled={submitting || !!tx}
           className="w-full bg-slate-800 text-white rounded py-3 text-sm font-medium hover:bg-slate-900 disabled:opacity-50"
         >
-          {submitting ? 'Enviando...' : `Ejecutar ${type}`}
+          {submitting ? 'Sending...' : `Execute ${type}`}
         </button>
 
         {tx && (
           <div className="border-t pt-4 mt-4 space-y-2">
-            <div className="text-xs text-slate-500">Transacción creada</div>
+            <div className="text-xs text-slate-500">Transaction created</div>
             <div className="font-mono text-xs">{tx.id}</div>
             <div className="flex items-center gap-2">
-              <span className="text-sm">Estado:</span>
+              <span className="text-sm">Status:</span>
               <StatusBadge status={tx.status} />
               {tx.status === 'PENDING' && (
-                <span className="text-xs text-slate-500">esperando resolución del bus...</span>
+                <span className="text-xs text-slate-500">waiting for the bus to resolve...</span>
               )}
             </div>
           </div>
@@ -189,7 +189,7 @@ function AccountSelect({
         required
         className="w-full mt-1 border border-slate-300 rounded px-3 py-2 text-sm"
       >
-        <option value="">Seleccionar cuenta...</option>
+        <option value="">Select account...</option>
         {accounts.map((acc) => (
           <option key={acc.id} value={acc.id}>
             {acc.id.slice(0, 8)}... · {acc.balance} {acc.currency}

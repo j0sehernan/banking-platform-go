@@ -1,7 +1,7 @@
 package events
 
-// Topics y nombres de eventos que viajan por el bus.
-// Los mantengo en un solo lugar para evitar typos sueltos en cada servicio.
+// Topics and event names traveling through the bus.
+// Keeping them in a single place avoids stray typos in each service.
 const (
 	// Topics
 	TopicAccountsEvents       = "accounts.events"
@@ -10,29 +10,29 @@ const (
 	TopicTransactionsEvents   = "transactions.events"
 	TopicDLQ                  = "dlq"
 
-	// Eventos de accounts
+	// Accounts events
 	EventClientCreated  = "ClientCreated"
 	EventAccountCreated = "AccountCreated"
 	EventBalanceUpdated = "BalanceUpdated"
 
-	// Comandos / eventos de transactions
+	// Transactions commands / events
 	EventTransactionRequested = "TransactionRequested"
 	EventTransactionCompleted = "TransactionCompleted"
 	EventTransactionRejected  = "TransactionRejected"
 
-	// Resultados que accounts manda de vuelta a transactions
+	// Results sent from accounts back to transactions
 	EventAccountsTransferApplied = "AccountsTransferApplied"
 	EventAccountsTransferFailed  = "AccountsTransferFailed"
 )
 
-// Tipos de transacción soportados.
+// Supported transaction types.
 const (
 	TxTypeDeposit  = "DEPOSIT"
 	TxTypeWithdraw = "WITHDRAW"
 	TxTypeTransfer = "TRANSFER"
 )
 
-// Estados de la transacción (máquina de estados).
+// Transaction states (state machine).
 const (
 	TxStatusPending   = "PENDING"
 	TxStatusCompleted = "COMPLETED"
@@ -41,7 +41,7 @@ const (
 
 // ===== Payloads =====
 
-// ClientCreatedPayload — accounts publica esto al crear un cliente.
+// ClientCreatedPayload — accounts publishes this when a client is created.
 type ClientCreatedPayload struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
@@ -49,26 +49,26 @@ type ClientCreatedPayload struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// AccountCreatedPayload — accounts publica esto al crear una cuenta.
+// AccountCreatedPayload — accounts publishes this when an account is created.
 type AccountCreatedPayload struct {
 	ID        string `json:"id"`
 	ClientID  string `json:"client_id"`
 	Currency  string `json:"currency"`
-	Balance   string `json:"balance"` // como string para no perder precisión
+	Balance   string `json:"balance"` // string to preserve decimal precision
 	CreatedAt string `json:"created_at"`
 }
 
-// BalanceUpdatedPayload — accounts publica esto al cambiar el saldo.
+// BalanceUpdatedPayload — accounts publishes this when a balance changes.
 type BalanceUpdatedPayload struct {
 	AccountID  string `json:"account_id"`
 	OldBalance string `json:"old_balance"`
 	NewBalance string `json:"new_balance"`
-	Reason     string `json:"reason"` // ej: "deposit", "withdraw", "transfer-out"
+	Reason     string `json:"reason"` // e.g. "deposit", "withdraw", "transfer-out"
 	UpdatedAt  string `json:"updated_at"`
 }
 
-// TransactionRequestedPayload — transactions publica esto en
-// transactions.commands para que accounts ejecute la operación.
+// TransactionRequestedPayload — transactions publishes this on
+// transactions.commands so accounts executes the operation.
 type TransactionRequestedPayload struct {
 	TransactionID string `json:"transaction_id"`
 	Type          string `json:"type"` // DEPOSIT | WITHDRAW | TRANSFER
@@ -78,15 +78,15 @@ type TransactionRequestedPayload struct {
 	Currency      string `json:"currency"`
 }
 
-// AccountsTransferAppliedPayload — accounts contesta a transactions
-// que la operación fue aplicada exitosamente.
+// AccountsTransferAppliedPayload — accounts replies to transactions
+// that the operation was applied successfully.
 type AccountsTransferAppliedPayload struct {
 	TransactionID string `json:"transaction_id"`
 	AppliedAt     string `json:"applied_at"`
 }
 
-// AccountsTransferFailedPayload — accounts contesta a transactions
-// que la operación falló y por qué.
+// AccountsTransferFailedPayload — accounts replies to transactions
+// that the operation failed and why.
 type AccountsTransferFailedPayload struct {
 	TransactionID string `json:"transaction_id"`
 	Reason        string `json:"reason"` // insufficient_funds | account_not_found | currency_mismatch
@@ -94,7 +94,7 @@ type AccountsTransferFailedPayload struct {
 	FailedAt      string `json:"failed_at"`
 }
 
-// TransactionCompletedPayload — transactions anuncia el resultado final OK.
+// TransactionCompletedPayload — transactions announces the final OK result.
 type TransactionCompletedPayload struct {
 	TransactionID string `json:"transaction_id"`
 	Type          string `json:"type"`
@@ -105,7 +105,7 @@ type TransactionCompletedPayload struct {
 	CompletedAt   string `json:"completed_at"`
 }
 
-// TransactionRejectedPayload — transactions anuncia el resultado final KO.
+// TransactionRejectedPayload — transactions announces the final KO result.
 type TransactionRejectedPayload struct {
 	TransactionID string `json:"transaction_id"`
 	Type          string `json:"type"`

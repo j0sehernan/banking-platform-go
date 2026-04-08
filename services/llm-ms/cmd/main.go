@@ -1,9 +1,9 @@
-// llm-ms expone explicaciones (cacheadas) y un chat scoped a una
-// transacción específica usando context grounding y SSE streaming.
+// llm-ms exposes (cached) explanations and a chat scoped to a specific
+// transaction using context grounding and SSE streaming.
 //
-// Mantiene una vista materializada de transacciones (`transactions_view`)
-// alimentada por eventos de Kafka — así no depende síncronamente de
-// transactions-ms para responder preguntas sobre una transacción.
+// It maintains a materialized view of transactions (`transactions_view`)
+// fed by Kafka events — so it doesn't depend synchronously on
+// transactions-ms to answer questions about a transaction.
 package main
 
 import (
@@ -44,13 +44,13 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// Decidir explainer: real o mock
+	// Decide which explainer to use: real or mock
 	var exp explainer.Explainer
 	if cfg.AnthropicAPIKey == "" {
-		logger.Warn("ANTHROPIC_API_KEY no configurada, usando MockExplainer")
+		logger.Warn("ANTHROPIC_API_KEY not set, using MockExplainer")
 		exp = explainer.NewMockExplainer()
 	} else {
-		logger.Info("usando ClaudeExplainer", "model", cfg.LLMModel)
+		logger.Info("using ClaudeExplainer", "model", cfg.LLMModel)
 		exp = explainer.NewClaudeExplainer(cfg.AnthropicAPIKey, cfg.LLMModel)
 	}
 
@@ -84,7 +84,7 @@ func run(logger *slog.Logger) error {
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
-		// timeouts grandes para SSE de chat (puede tardar varios segundos)
+		// large timeouts for SSE chat (can take several seconds)
 		WriteTimeout: 5 * time.Minute,
 	}
 
@@ -150,7 +150,7 @@ func waitForDB(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) err
 
 func registerDomainErrors() {
 	httpx.RegisterDomainError(domain.ErrTransactionNotFound,
-		httpx.NewError(nethttp.StatusNotFound, "transaction_not_found", "La transacción no existe en la vista"))
+		httpx.NewError(nethttp.StatusNotFound, "transaction_not_found", "Transaction not found in view"))
 	httpx.RegisterDomainError(domain.ErrExplanationNotFound,
-		httpx.NewError(nethttp.StatusNotFound, "explanation_not_found", "Aún no hay explicación para esta transacción"))
+		httpx.NewError(nethttp.StatusNotFound, "explanation_not_found", "No explanation yet for this transaction"))
 }

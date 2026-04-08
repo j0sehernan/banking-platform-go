@@ -1,5 +1,5 @@
-// Package service contiene los casos de uso del microservicio.
-// Orquesta domain + repo, sin tocar HTTP ni Kafka directamente.
+// Package service contains the use cases of the microservice.
+// It orchestrates domain + repo, without touching HTTP or Kafka directly.
 package service
 
 import (
@@ -13,9 +13,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// AccountService maneja clientes y cuentas. Tiene acceso al pool de
-// Postgres porque algunas operaciones requieren transacciones que
-// abarcan varios repos (crear cuenta + insertar outbox).
+// AccountService manages clients and accounts. It has access to the
+// Postgres pool because some operations need transactions that span
+// multiple repos (create account + insert outbox).
 type AccountService struct {
 	pool *pgxpool.Pool
 }
@@ -24,14 +24,14 @@ func NewAccountService(pool *pgxpool.Pool) *AccountService {
 	return &AccountService{pool: pool}
 }
 
-// CreateClient crea un cliente y publica ClientCreated vía outbox.
-// Todo en una sola transacción → atomicidad garantizada.
+// CreateClient creates a client and publishes ClientCreated via outbox.
+// Everything in a single transaction → atomicity guaranteed.
 func (s *AccountService) CreateClient(ctx context.Context, name, email string) (*domain.Client, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck // si commit ok, este rollback es no-op
+	defer tx.Rollback(ctx) //nolint:errcheck // if commit ok, this rollback is a no-op
 
 	clientRepo := newClientRepoTx(tx)
 	outboxRepo := newOutboxRepoTx(tx)
@@ -41,7 +41,7 @@ func (s *AccountService) CreateClient(ctx context.Context, name, email string) (
 		return nil, err
 	}
 
-	// publicar evento via outbox (en la misma tx)
+	// publish event via outbox (in the same tx)
 	payload := events.ClientCreatedPayload{
 		ID:        client.ID.String(),
 		Name:      client.Name,
@@ -63,9 +63,9 @@ func (s *AccountService) CreateClient(ctx context.Context, name, email string) (
 	return &client, nil
 }
 
-// CreateAccount crea una cuenta para un cliente existente y publica AccountCreated.
+// CreateAccount creates an account for an existing client and publishes AccountCreated.
 func (s *AccountService) CreateAccount(ctx context.Context, clientID uuid.UUID, currency string) (*domain.Account, error) {
-	// validamos primero que el cliente existe
+	// validate first that the client exists
 	clientRepo := newClientRepoPool(s.pool)
 	if _, err := clientRepo.GetByID(ctx, clientID.String()); err != nil {
 		return nil, err
@@ -110,25 +110,25 @@ func (s *AccountService) CreateAccount(ctx context.Context, clientID uuid.UUID, 
 	return &acc, nil
 }
 
-// GetAccount lee una cuenta por id.
+// GetAccount reads an account by id.
 func (s *AccountService) GetAccount(ctx context.Context, id uuid.UUID) (*domain.Account, error) {
 	repo := newAccountRepoPool(s.pool)
 	return repo.GetByID(ctx, id)
 }
 
-// ListAccounts devuelve todas las cuentas (paginado simple, ver repo).
+// ListAccounts returns all accounts (simple pagination, see repo).
 func (s *AccountService) ListAccounts(ctx context.Context) ([]domain.Account, error) {
 	repo := newAccountRepoPool(s.pool)
 	return repo.ListAll(ctx)
 }
 
-// GetClient lee un cliente por id.
+// GetClient reads a client by id.
 func (s *AccountService) GetClient(ctx context.Context, id string) (*domain.Client, error) {
 	repo := newClientRepoPool(s.pool)
 	return repo.GetByID(ctx, id)
 }
 
-// ListAccountsByClient devuelve las cuentas de un cliente.
+// ListAccountsByClient returns the accounts of a client.
 func (s *AccountService) ListAccountsByClient(ctx context.Context, clientID uuid.UUID) ([]domain.Account, error) {
 	repo := newAccountRepoPool(s.pool)
 	return repo.ListByClient(ctx, clientID)

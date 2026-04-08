@@ -25,21 +25,21 @@ func TestNewTransaction_Defaults(t *testing.T) {
 func TestTransaction_StateMachine(t *testing.T) {
 	tx := Transaction{Status: StatusPending}
 
-	t.Run("pending puede pasar a completed", func(t *testing.T) {
+	t.Run("pending can move to completed", func(t *testing.T) {
 		assert.True(t, tx.CanTransitionTo(StatusCompleted))
 	})
 
-	t.Run("pending puede pasar a rejected", func(t *testing.T) {
+	t.Run("pending can move to rejected", func(t *testing.T) {
 		assert.True(t, tx.CanTransitionTo(StatusRejected))
 	})
 
-	t.Run("completed es terminal", func(t *testing.T) {
+	t.Run("completed is terminal", func(t *testing.T) {
 		completed := Transaction{Status: StatusCompleted}
 		assert.False(t, completed.CanTransitionTo(StatusRejected))
 		assert.False(t, completed.CanTransitionTo(StatusPending))
 	})
 
-	t.Run("rejected es terminal", func(t *testing.T) {
+	t.Run("rejected is terminal", func(t *testing.T) {
 		rejected := Transaction{Status: StatusRejected}
 		assert.False(t, rejected.CanTransitionTo(StatusCompleted))
 	})

@@ -1,22 +1,22 @@
 # banking-platform-go
-# Levanta TODO el sistema con un solo comando: `docker compose up`.
+# Brings up the WHOLE system with a single command: `docker compose up`.
 #
-# Componentes:
-#   - kafka (Apache Kafka 3.9 en KRaft mode, sin Zookeeper)
-#   - kafka-init (job one-shot que crea los topics)
-#   - kafka-ui (provectus, http://localhost:8080 para inspeccionar el bus)
-#   - 3 Postgres independientes (uno por microservicio)
-#   - 3 jobs de migrate (one-shot, aplican migrations al arrancar)
-#   - 3 microservicios Go
-#   - frontend Next.js
+# Components:
+#   - kafka (Apache Kafka 3.9 in KRaft mode, no Zookeeper)
+#   - kafka-init (one-shot job that creates the topics)
+#   - kafka-ui (provectus, http://localhost:8090 to inspect the bus)
+#   - 3 independent Postgres instances (one per microservice)
+#   - 3 migrate jobs (one-shot, apply migrations on startup)
+#   - 3 Go microservices
+#   - Next.js frontend
 #
-# Para ver los logs de todo: docker compose logs -f
-# Para limpiar todo (incluyendo data): docker compose down -v
+# Tail logs from everything: docker compose logs -f
+# Wipe everything (including data): docker compose down -v
 
 services:
 
   # ============================================================
-  # BUS DE EVENTOS
+  # EVENT BUS
   # ============================================================
 
   kafka:
@@ -25,11 +25,12 @@ services:
     ports:
       - "9092:9092"
     environment:
-      # Single-node KRaft (sin Zookeeper)
+      # Single-node KRaft (no Zookeeper)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      # Listeners: el interno (intra-network) escucha en kafka:9092 y el externo
-      # (host) en localhost:9092. Ambos se anuncian para que cada cliente use el correcto.
+      # Listeners: the internal one (intra-network) listens on kafka:9092
+      # and the external one (host) on localhost:9092. Both are advertised
+      # so each client uses the right one.
       KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,EXTERNAL://localhost:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
@@ -50,8 +51,8 @@ services:
       start_period: 20s
 
   kafka-init:
-    # Job one-shot: crea los topics y termina. Los servicios que necesitan
-    # los topics dependen de este job vía service_completed_successfully.
+    # One-shot job: creates the topics and exits. The services that need
+    # the topics depend on this via service_completed_successfully.
     image: apache/kafka:3.9.0
     container_name: bp-kafka-init
     depends_on:
@@ -86,7 +87,7 @@ services:
         condition: service_healthy
 
   # ============================================================
-  # DATABASES (1 por microservicio - principio de DB por servicio)
+  # DATABASES (1 per microservice — DB-per-service principle)
   # ============================================================
 
   accounts-db:
@@ -141,7 +142,7 @@ services:
       retries: 5
 
   # ============================================================
-  # MIGRATIONS (one-shot jobs, esperan a las DBs)
+  # MIGRATIONS (one-shot jobs, wait for the DBs)
   # ============================================================
 
   accounts-migrate:
@@ -190,7 +191,7 @@ services:
     restart: on-failure
 
   # ============================================================
-  # MICROSERVICIOS GO
+  # GO MICROSERVICES
   # ============================================================
 
   accounts-ms:
@@ -258,7 +259,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Las URLs son las del browser host, no de la red interna
+      # URLs for the host browser, not the internal docker network
       NEXT_PUBLIC_ACCOUNTS_API: http://localhost:8081
       NEXT_PUBLIC_TRANSACTIONS_API: http://localhost:8082
       NEXT_PUBLIC_LLM_API: http://localhost:8083

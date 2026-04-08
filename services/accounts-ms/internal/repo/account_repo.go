@@ -18,7 +18,7 @@ func NewAccountRepo(db DBTX) *AccountRepo {
 	return &AccountRepo{db: db}
 }
 
-// Create inserta una cuenta nueva.
+// Create inserts a new account.
 func (r *AccountRepo) Create(ctx context.Context, a domain.Account) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO accounts (id, client_id, currency, balance, created_at, updated_at)
@@ -28,7 +28,7 @@ func (r *AccountRepo) Create(ctx context.Context, a domain.Account) error {
 	return err
 }
 
-// GetByID lee una cuenta por id.
+// GetByID reads an account by id.
 func (r *AccountRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Account, error) {
 	var a domain.Account
 	err := r.db.QueryRow(ctx,
@@ -45,7 +45,7 @@ func (r *AccountRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Accoun
 	return &a, nil
 }
 
-// ListByClient devuelve todas las cuentas de un cliente.
+// ListByClient returns all accounts for a client.
 func (r *AccountRepo) ListByClient(ctx context.Context, clientID uuid.UUID) ([]domain.Account, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, client_id, currency, balance, created_at, updated_at
@@ -68,7 +68,7 @@ func (r *AccountRepo) ListByClient(ctx context.Context, clientID uuid.UUID) ([]d
 	return accounts, rows.Err()
 }
 
-// ListAll devuelve todas las cuentas (paginado simple).
+// ListAll returns all accounts (simple pagination).
 func (r *AccountRepo) ListAll(ctx context.Context) ([]domain.Account, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, client_id, currency, balance, created_at, updated_at
@@ -90,9 +90,9 @@ func (r *AccountRepo) ListAll(ctx context.Context) ([]domain.Account, error) {
 	return accounts, rows.Err()
 }
 
-// Credit suma `amount` al balance de una cuenta de forma atómica.
-// Devuelve el balance anterior y el nuevo (para emitir BalanceUpdated).
-// Si la cuenta no existe, devuelve ErrAccountNotFound.
+// Credit atomically adds `amount` to an account's balance.
+// Returns the previous and new balance (so we can emit BalanceUpdated).
+// If the account does not exist, returns ErrAccountNotFound.
 func (r *AccountRepo) Credit(ctx context.Context, id uuid.UUID, amount decimal.Decimal) (oldBal, newBal decimal.Decimal, err error) {
 	err = r.db.QueryRow(ctx,
 		`UPDATE accounts
@@ -110,10 +110,11 @@ func (r *AccountRepo) Credit(ctx context.Context, id uuid.UUID, amount decimal.D
 	return oldBal, newBal, nil
 }
 
-// Debit resta `amount` al balance solo si hay saldo suficiente.
-// Operación atómica con condición: si el WHERE no matchea (saldo
-// insuficiente), no afecta filas y devuelve ErrInsufficientFunds.
-// Esto es idempotente con la regla "saldo nunca negativo".
+// Debit subtracts `amount` from a balance only if there's enough funds.
+// Atomic operation with a condition: if the WHERE doesn't match
+// (insufficient funds), no rows are affected and we return
+// ErrInsufficientFunds. This is what enforces the "balance never
+// negative" rule even under concurrent operations.
 func (r *AccountRepo) Debit(ctx context.Context, id uuid.UUID, amount decimal.Decimal) (oldBal, newBal decimal.Decimal, err error) {
 	err = r.db.QueryRow(ctx,
 		`UPDATE accounts
@@ -124,8 +125,8 @@ func (r *AccountRepo) Debit(ctx context.Context, id uuid.UUID, amount decimal.De
 	).Scan(&oldBal, &newBal)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			// puede ser que la cuenta no exista o que no tenga saldo
-			// distinguimos haciendo un select adicional (raro pero útil para errores claros)
+			// could be either: the account doesn't exist, or no balance
+			// we distinguish with an extra select for clearer error messages
 			var exists bool
 			_ = r.db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM accounts WHERE id = $1)`, id).Scan(&exists)
 			if !exists {

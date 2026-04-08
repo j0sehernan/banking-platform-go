@@ -10,7 +10,7 @@ import (
 	"github.com/j0sehernan/banking-platform-go/pkg/httpx"
 )
 
-// NewRouter arma el router con todos los middlewares globales y las rutas.
+// NewRouter wires up the router with all the global middlewares and routes.
 func NewRouter(h *Handler, logger *slog.Logger) http.Handler {
 	r := chi.NewRouter()
 
@@ -27,7 +27,7 @@ func NewRouter(h *Handler, logger *slog.Logger) http.Handler {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// rutas API
+	// API routes
 	r.Post("/clients", httpx.Wrap(h.CreateClient))
 	r.Get("/clients/{id}", httpx.Wrap(h.GetClient))
 

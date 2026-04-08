@@ -1,29 +1,29 @@
 # banking-platform-go
 
-Plataforma bancaria simplificada construida con **Go + Apache Kafka + Claude (LLM)** para resolver el challenge técnico de la entidad financiera.
+A simplified banking platform built with **Go + Apache Kafka + Claude (LLM)** to solve a financial-services technical challenge.
 
-Tres microservicios desacoplados se comunican vía un bus de eventos. Un cuarto componente (LLM) consume los eventos del bus y genera explicaciones en lenguaje natural. Hay también un frontend Next.js que sirve como herramienta de demo: además de una UI funcional, incluye un panel lateral que muestra en vivo todos los HTTP requests/responses, y un chat con el LLM con streaming SSE acotado a una transacción específica.
+Three decoupled microservices communicate over an event bus. A fourth component (LLM) consumes events from the bus and generates natural-language explanations. There is also a Next.js frontend that doubles as a demo tool: besides a working UI, it includes a side panel that shows every HTTP request/response in real time, and a chat with the LLM with SSE streaming scoped to a specific transaction.
 
-## Tabla de contenidos
+## Table of contents
 
-- [Arquitectura general](#arquitectura-general)
-- [Stack técnico](#stack-técnico)
-- [Cómo levantar todo (un solo comando)](#cómo-levantar-todo-un-solo-comando)
-- [Endpoints disponibles](#endpoints-disponibles)
-- [Flujo completo de una transferencia](#flujo-completo-de-una-transferencia)
-- [Rol del microservicio LLM](#rol-del-microservicio-llm)
-- [Patrones implementados](#patrones-implementados)
-- [Decisiones técnicas y trade-offs](#decisiones-técnicas-y-trade-offs)
-- [Estructura del repo](#estructura-del-repo)
+- [Overall architecture](#overall-architecture)
+- [Tech stack](#tech-stack)
+- [How to run everything (a single command)](#how-to-run-everything-a-single-command)
+- [Available endpoints](#available-endpoints)
+- [Full transfer flow](#full-transfer-flow)
+- [Role of the LLM microservice](#role-of-the-llm-microservice)
+- [Patterns implemented](#patterns-implemented)
+- [Technical decisions and trade-offs](#technical-decisions-and-trade-offs)
+- [Repo structure](#repo-structure)
 - [Tests](#tests)
-- [Qué dejaría para una v2](#qué-dejaría-para-una-v2)
+- [What I would leave for v2](#what-i-would-leave-for-v2)
 
-## Arquitectura general
+## Overall architecture
 
 ```
                                   ┌──────────────────────────────┐
                                   │      Apache Kafka 3.9        │
-                                  │      (KRaft, sin ZK)         │
+                                  │      (KRaft, no ZK)          │
                                   │                              │
                                   │  Topics:                     │
                                   │   ├ accounts.events          │
@@ -40,10 +40,10 @@ Tres microservicios desacoplados se comunican vía un bus de eventos. Un cuarto 
    │   accounts-ms      │              │  transactions-ms   │             │      llm-ms        │
    │   :8081            │              │  :8082             │             │   :8083            │
    │                    │              │                    │             │                    │
-   │  · clientes        │              │  · deposit         │             │  · explanation     │
-   │  · cuentas         │              │  · withdraw        │             │  · chat (SSE)      │
-   │  · saldo no neg.   │              │  · transfer        │             │  · materialized    │
-   │  · outbox + idemp. │              │  · saga orchestr.  │             │    view de tx      │
+   │  · clients         │              │  · deposit         │             │  · explanation     │
+   │  · accounts        │              │  · withdraw        │             │  · chat (SSE)      │
+   │  · no-neg balance  │              │  · transfer        │             │  · materialized    │
+   │  · outbox + idemp. │              │  · saga orchestr.  │             │    view of tx      │
    └─────────┬──────────┘              └─────────┬──────────┘             └─────────┬──────────┘
              │                                   │                                  │
              ▼                                   ▼                                  ▼
@@ -64,75 +64,76 @@ Tres microservicios desacoplados se comunican vía un bus de eventos. Un cuarto 
    ┌──────────────────────────────────────────────────────────────────────────────────┐
    │                          web (Next.js, :3000)                                    │
    │                                                                                  │
-   │  · listado/creación de cuentas         · panel lateral de actividad técnica      │
-   │  · creación de transacciones           · chat scoped a una tx con SSE streaming  │
+   │  · list/create accounts                · technical activity side panel           │
+   │  · create transactions                 · chat scoped to a tx with SSE streaming  │
    └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Principios:**
+**Principles:**
 
-- Cada microservicio tiene **su propia base de datos** (no comparten tablas).
-- La comunicación entre microservicios es **siempre vía Kafka**, nunca HTTP directo.
-- Cada microservicio publica eventos a sus topics y consume de los topics que le interesan.
-- El frontend solo habla HTTP con cada microservicio (CORS habilitado).
+- Each microservice has **its own database** (no shared tables).
+- Inter-service communication is **always via Kafka**, never direct HTTP.
+- Each microservice publishes events to its topics and consumes from the topics it cares about.
+- The frontend talks HTTP to each microservice (CORS enabled).
 
-## Stack técnico
+## Tech stack
 
-| Capa | Librería | Por qué |
+| Layer | Library | Why |
 |---|---|---|
-| Lenguaje backend | Go 1.23 | Lo que pide el enunciado |
-| Bus de eventos | Apache Kafka 3.9 (KRaft mode) | Lo que pide el enunciado, sin Zookeeper porque ya está deprecated |
-| HTTP router | `go-chi/chi/v5` | Minimalista, idiomático Go, compatible con `net/http` estándar |
-| Postgres client | `jackc/pgx/v5` | Sin ORM, queries simples y type-safe |
-| Migraciones | `golang-migrate/migrate/v4` | Estándar de facto, archivos SQL versionados |
-| Kafka client | `segmentio/kafka-go` | Go puro sin CGO, fácil de buildear en Docker |
-| Validación | `go-playground/validator/v10` | Tags declarativos en los DTOs |
-| Decimal | `shopspring/decimal` | Crítico en banca para no perder precisión (NUMERIC en PG) |
-| Config | `caarlos0/env/v11` | Carga de env vars a struct con tags |
-| LLM | `anthropics/anthropic-sdk-go` | SDK oficial de Claude |
-| Logging | stdlib `log/slog` | Structured logging built-in (Go 1.21+) |
-| Frontend | Next.js 15 + React 19 + Tailwind | Stack moderno, App Router |
-| Estado del front | Zustand | Store global liviano (~2KB), sin boilerplate |
-| Observabilidad del bus | Kafka UI (provectus) | http://localhost:8090, gratis y profesional |
+| Backend language | Go 1.23 | What the challenge asks for |
+| Event bus | Apache Kafka 3.9 (KRaft mode) | What the challenge asks for, no Zookeeper because it is being deprecated |
+| HTTP router | `go-chi/chi/v5` | Minimal, idiomatic Go, compatible with `net/http` standard |
+| Postgres client | `jackc/pgx/v5` | No ORM, simple type-safe queries |
+| Migrations | `golang-migrate/migrate/v4` | De-facto standard, versioned SQL files |
+| Kafka client | `segmentio/kafka-go` | Pure Go without CGO, easy to build in Docker |
+| Validation | `go-playground/validator/v10` | Declarative tags on DTOs |
+| Decimal | `shopspring/decimal` | Critical in banking to keep precision (NUMERIC in PG) |
+| Config | `caarlos0/env/v11` | Loads env vars into a struct via tags |
+| LLM | `anthropics/anthropic-sdk-go` | Official Claude SDK |
+| Logging | stdlib `log/slog` | Built-in structured logging (Go 1.21+) |
+| Frontend | Next.js 15 + React 19 + Tailwind | Modern stack, App Router |
+| Frontend state | Zustand | Lightweight global store (~2KB), no boilerplate |
+| Bus observability | Kafka UI (provectus) | http://localhost:8090, free and professional |
 
-## Cómo levantar todo (un solo comando)
+## How to run everything (a single command)
 
-**Prerequisitos:** Docker y Docker Compose v2.
+**Prerequisites:** Docker and Docker Compose v2.
 
 ```bash
 git clone https://github.com/j0sehernan/banking-platform-go.git
 cd banking-platform-go
 
-# Opcional: si tenés ANTHROPIC_API_KEY, copiá .env.example a .env y editalo.
-# Si no, llm-ms arranca con MockExplainer y todo sigue funcionando.
+# Optional: if you have an ANTHROPIC_API_KEY, copy .env.example to .env
+# and edit it. Otherwise llm-ms starts with MockExplainer and the
+# whole system still works.
 cp .env.example .env
 
-# Levantar todo
+# Bring everything up
 docker compose up
 ```
 
-A los ~30 segundos vas a tener:
+In about ~30 seconds you will have:
 
-| URL | Qué es |
+| URL | What it is |
 |---|---|
-| http://localhost:3000 | Frontend Next.js |
-| http://localhost:8090 | **Kafka UI** (inspeccioná topics, mensajes, consumer groups) |
+| http://localhost:3000 | Next.js frontend |
+| http://localhost:8090 | **Kafka UI** (inspect topics, messages, consumer groups) |
 | http://localhost:8081 | accounts-ms HTTP API |
 | http://localhost:8082 | transactions-ms HTTP API |
 | http://localhost:8083 | llm-ms HTTP API |
 | `localhost:5433/5434/5435` | Postgres (accounts/transactions/llm), `psql -h localhost -p 5433 -U accounts -d accounts` |
 
-Para limpiar todo (incluyendo volúmenes):
+To wipe everything (including volumes):
 
 ```bash
 docker compose down -v
 ```
 
-## Endpoints disponibles
+## Available endpoints
 
 ### accounts-ms (`:8081`)
 
-| Método | Path | Body |
+| Method | Path | Body |
 |---|---|---|
 | `POST` | `/clients` | `{ "name": "...", "email": "..." }` |
 | `GET` | `/clients/{id}` | — |
@@ -143,7 +144,7 @@ docker compose down -v
 
 ### transactions-ms (`:8082`)
 
-| Método | Path | Body |
+| Method | Path | Body |
 |---|---|---|
 | `POST` | `/transactions/deposit` | `{ "to_account_id", "amount", "currency", "idempotency_key" }` |
 | `POST` | `/transactions/withdraw` | `{ "from_account_id", "amount", "currency", "idempotency_key" }` |
@@ -154,278 +155,278 @@ docker compose down -v
 
 ### llm-ms (`:8083`)
 
-| Método | Path | Body |
+| Method | Path | Body |
 |---|---|---|
 | `GET` | `/transactions/{id}/explanation` | — |
-| `POST` | `/chat` | `{ "tx_id", "messages": [{"role","content"}, ...] }` (responde SSE stream) |
+| `POST` | `/chat` | `{ "tx_id", "messages": [{"role","content"}, ...] }` (responds with an SSE stream) |
 
-### Ejemplo manual con curl
+### Manual example with curl
 
 ```bash
-# 1. Crear cliente
+# 1. Create a client
 curl -X POST localhost:8081/clients \
   -H "Content-Type: application/json" \
   -d '{"name":"Ana Perez","email":"ana@example.com"}'
 
-# Guardá el id devuelto, lo usás abajo (ANA_ID)
+# Save the returned id, you'll use it below (ANA_ID)
 
-# 2. Crear cuenta
+# 2. Create an account
 curl -X POST localhost:8081/accounts \
   -H "Content-Type: application/json" \
   -d "{\"client_id\":\"$ANA_ID\",\"currency\":\"USD\"}"
 
-# 3. Depositar
+# 3. Deposit
 curl -X POST localhost:8082/transactions/deposit \
   -H "Content-Type: application/json" \
   -d "{\"to_account_id\":\"$ACC_ID\",\"amount\":\"1000\",\"currency\":\"USD\",\"idempotency_key\":\"dep-001\"}"
 
-# 4. Ver saldo (debería ser 1000 después de unos segundos)
+# 4. Check balance (should be 1000 after a few seconds)
 curl localhost:8081/accounts/$ACC_ID/balance
 
-# 5. Ver explicación generada por Claude
+# 5. See the explanation generated by Claude
 curl localhost:8083/transactions/$TX_ID/explanation
 ```
 
-## Flujo completo de una transferencia
+## Full transfer flow
 
-Veamos paso a paso qué pasa cuando un usuario hace una transferencia de Ana → Luis por 300 USD.
+Step by step of what happens when a user makes a transfer of Ana → Luis for 300 USD.
 
 ```
 1. POST /transactions/transfer
    ─────────────────────────────
-   El front llama a transactions-ms con el body de la transferencia.
+   The front calls transactions-ms with the transfer body.
 
-2. transactions-ms (en una sola tx PG):
+2. transactions-ms (in a single PG tx):
    ────────────────────────────────────
    BEGIN
      INSERT transactions (id, status='PENDING', ...)
      INSERT outbox (topic='transactions.commands', payload=TransactionRequested)
    COMMIT
-   → 202 Accepted al cliente con { id, status: PENDING }
+   → 202 Accepted to the client with { id, status: PENDING }
 
-3. outbox-worker de transactions-ms (background):
-   ──────────────────────────────────────────────
-   Lee filas pendientes de outbox cada 500ms con FOR UPDATE SKIP LOCKED.
-   Publica TransactionRequested al topic transactions.commands.
+3. outbox-worker for transactions-ms (background):
+   ───────────────────────────────────────────────
+   Reads pending outbox rows every 500ms with FOR UPDATE SKIP LOCKED.
+   Publishes TransactionRequested to the transactions.commands topic.
 
-4. accounts-ms consume de transactions.commands:
-   ─────────────────────────────────────────────
-   Verifica idempotencia (INSERT processed_events ON CONFLICT DO NOTHING).
+4. accounts-ms consumes from transactions.commands:
+   ───────────────────────────────────────────────
+   Verifies idempotency (INSERT processed_events ON CONFLICT DO NOTHING).
    BEGIN
      UPDATE accounts SET balance = balance - 300
-       WHERE id = AnaAcc AND balance >= 300   ← atómico, sin saldo negativo posible
+       WHERE id = AnaAcc AND balance >= 300   ← atomic, no negative balance possible
      UPDATE accounts SET balance = balance + 300 WHERE id = LuisAcc
      INSERT outbox (topic='accounts.tx-results', payload=AccountsTransferApplied)
      INSERT outbox (topic='accounts.events', payload=BalanceUpdated × 2)
    COMMIT
 
-   Si el saldo era insuficiente, el primer UPDATE no afecta filas.
-   accounts-ms hace ROLLBACK y publica AccountsTransferFailed con razón.
+   If the balance was insufficient, the first UPDATE doesn't affect rows.
+   accounts-ms does ROLLBACK and publishes AccountsTransferFailed with reason.
 
-5. outbox-worker de accounts-ms publica al bus.
+5. outbox-worker for accounts-ms publishes to the bus.
 
-6. transactions-ms consume de accounts.tx-results:
-   ──────────────────────────────────────────────
-   Verifica idempotencia.
+6. transactions-ms consumes from accounts.tx-results:
+   ──────────────────────────────────────────────────
+   Verifies idempotency.
    BEGIN
-     UPDATE transactions SET status = 'COMPLETED' (o REJECTED) WHERE id = txID
+     UPDATE transactions SET status = 'COMPLETED' (or REJECTED) WHERE id = txID
      INSERT outbox (topic='transactions.events', payload=TransactionCompleted/Rejected)
    COMMIT
 
-7. outbox-worker de transactions-ms publica al bus.
+7. outbox-worker for transactions-ms publishes to the bus.
 
-8. llm-ms consume de transactions.events:
-   ──────────────────────────────────────
-   Verifica idempotencia.
-   UPSERT en transactions_view (mantiene su copia local de transacciones).
-   En background (goroutine): llama a Claude → guarda explicación.
+8. llm-ms consumes from transactions.events:
+   ─────────────────────────────────────────
+   Verifies idempotency.
+   UPSERT into transactions_view (keeps its local copy of transactions).
+   In background (goroutine): calls Claude → stores explanation.
 
-9. Front (en paralelo, polling):
+9. Front (in parallel, polling):
    ─────────────────────────────
    GET /transactions/{id} → status: COMPLETED
-   GET /transactions/{id}/explanation → texto generado
+   GET /transactions/{id}/explanation → generated text
 ```
 
-Esto es una **saga orquestada** con `transactions-ms` como orquestador implícito: él inicia (paso 1), recibe el resultado de accounts (paso 6), y emite el evento final (paso 7). El "ciclo del saga" se cierra cuando transactions-ms recibe la respuesta de accounts y puede marcar el estado final.
+This is an **orchestrated saga** with `transactions-ms` as the implicit orchestrator: it starts (step 1), receives the result from accounts (step 6), and emits the final event (step 7). The "saga loop" closes when transactions-ms receives the response from accounts and can mark the final state.
 
-**Compensación**: como el débito y el crédito ocurren en una sola transacción Postgres en accounts-ms, si el crédito al destino fallara, el débito al origen se revierte automáticamente con `ROLLBACK`. La saga es simple porque la atomicidad local elimina la necesidad de pasos compensatorios complejos.
+**Compensation**: since debit and credit happen in a single Postgres transaction in accounts-ms, if the credit on the destination failed, the debit on the source automatically rolls back via `ROLLBACK`. The saga is simple because local atomicity removes the need for complex compensating steps.
 
-## Rol del microservicio LLM
+## Role of the LLM microservice
 
-`llm-ms` no tiene lógica bancaria propia. Su rol es **interpretar información** y generar texto en lenguaje natural. Cumple con el requisito del enunciado de "explicar una transacción bancaria".
+`llm-ms` does not contain banking logic. Its job is to **interpret information** and generate natural-language text. It fulfills the challenge requirement of "explaining a banking transaction".
 
-Tiene tres responsabilidades:
+It has three responsibilities:
 
-1. **Mantener una vista materializada de transacciones (read model)**: consume `transactions.events` desde Kafka y mantiene una copia local en `transactions_view`. Esto le permite responder preguntas sobre cualquier transacción sin tocar a transactions-ms vía HTTP.
+1. **Maintain a materialized view of transactions (read model)**: consumes `transactions.events` from Kafka and keeps a local copy in `transactions_view`. This lets it answer questions about any transaction without touching transactions-ms via HTTP.
 
-2. **Generar explicaciones automáticas**: cada vez que llega un `TransactionCompleted` o `TransactionRejected`, llm-ms llama a Claude con el contexto y guarda el texto en `transaction_explanations`. Cuando el front pide la explicación, se devuelve cacheada (no se llama a Claude cada vez).
+2. **Generate automatic explanations**: every time a `TransactionCompleted` or `TransactionRejected` event arrives, llm-ms calls Claude with the context and stores the text in `transaction_explanations`. When the front asks for the explanation, it is returned cached (no Claude call every time).
 
-3. **Chat scoped a una transacción**: el endpoint `POST /chat` recibe el `tx_id` y el historial de mensajes del front, lee el contexto de la transacción de su vista local, construye un system prompt con context grounding y reglas de scope estrictas, y devuelve un stream SSE con la respuesta del LLM. El usuario solo puede preguntar sobre **esa** transacción específica.
+3. **Chat scoped to one transaction**: the `POST /chat` endpoint receives the `tx_id` and the chat history from the front, reads the transaction context from its local view, builds a system prompt with context grounding and strict scope rules, and returns an SSE stream with the LLM response. The user can only ask about **that** specific transaction.
 
-**Adapter pattern para el LLM**: la interface `Explainer` tiene dos implementaciones:
+**Adapter pattern for the LLM**: the `Explainer` interface has two implementations:
 
-- `ClaudeExplainer`: usa el SDK oficial de Anthropic, modelo `claude-haiku-4-5` (rápido, barato).
-- `MockExplainer`: respuestas template deterministas. Se usa automáticamente si `ANTHROPIC_API_KEY` está vacío. Permite que el sistema funcione completo en local sin credenciales.
+- `ClaudeExplainer`: uses the official Anthropic SDK, model `claude-haiku-4-5` (fast, cheap).
+- `MockExplainer`: deterministic template responses. Used automatically when `ANTHROPIC_API_KEY` is empty. Lets the system run end-to-end locally without credentials.
 
-**Por qué el chat NO pasa por Kafka**: el chat es comunicación sincrónica usuario↔llm-ms↔Claude, no hay eventos de negocio que otros servicios necesiten procesar. Mezclar Kafka acá sería over-engineering (ver sección "Sync vs Async" abajo).
+**Why the chat does NOT go through Kafka**: the chat is synchronous communication user↔llm-ms↔Claude, there are no business events that other services need to process. Mixing Kafka here would be over-engineering (see "Sync vs Async" below).
 
-## Patrones implementados
+## Patterns implemented
 
 ### Outbox pattern
-Garantiza atomicidad entre cambios de estado en la DB y la publicación de eventos a Kafka, sin two-phase commit. El cambio de estado y la fila del outbox se insertan en la misma transacción Postgres. Un worker en background lee con `FOR UPDATE SKIP LOCKED` y publica a Kafka. Si Kafka está caído, los eventos se acumulan en outbox y se publican cuando vuelve.
+Guarantees atomicity between DB state changes and publishing events to Kafka, without two-phase commit. The state change and the outbox row are inserted in the same Postgres transaction. A background worker reads with `FOR UPDATE SKIP LOCKED` and publishes to Kafka. If Kafka is down, events accumulate in outbox and get published when it comes back.
 
-Sin esto, un crash justo después de un commit pero antes de publicar perdería el evento → estado inconsistente entre microservicios. **Inaceptable en banca.**
+Without this, a crash right after a commit but before publishing would lose the event → inconsistent state across services. **Unacceptable in banking.**
 
-### Inbox pattern (idempotencia de consumers)
-Kafka garantiza at-least-once delivery, lo que significa que el mismo evento puede llegar dos o más veces (rebalance, restart, commit que falla). Si no manejamos idempotencia, un re-delivery causaría doble débito en una cuenta.
+### Inbox pattern (consumer idempotency)
+Kafka guarantees at-least-once delivery, which means the same event can arrive twice or more (rebalance, restart, commit that fails). If we don't handle idempotency, a redelivery would cause double debit on an account.
 
-Cada consumer hace `INSERT INTO processed_events (event_id) ON CONFLICT DO NOTHING RETURNING event_id`. Si no devuelve fila, el evento ya fue procesado y se hace skip.
+Each consumer does `INSERT INTO processed_events (event_id) ON CONFLICT DO NOTHING RETURNING event_id`. If no row is returned, the event was already processed and gets skipped.
 
-### Saga orquestada
-La transferencia es una operación que cruza dos microservicios (transactions-ms y accounts-ms), por lo que no podemos hacerla en una sola transacción ACID. La modelamos como una saga: pasos secuenciales coordinados por eventos, con `transactions-ms` como orquestador implícito.
+### Orchestrated saga
+The transfer is an operation that crosses two microservices (transactions-ms and accounts-ms), so we cannot do it in a single ACID transaction. We model it as a saga: sequential steps coordinated by events, with `transactions-ms` as the implicit orchestrator.
 
-### Materialized view / Read model
-`llm-ms` no tiene "su" data de transacciones — pero la necesita para responder al chat. Mantiene una copia local (`transactions_view`) alimentada por los eventos de Kafka. Esto elimina el acoplamiento HTTP entre llm-ms y transactions-ms, y le da resiliencia: aunque transactions-ms esté caído, el chat sigue funcionando.
+### Materialized view / read model
+`llm-ms` does not own transaction data — but it needs it to power the chat. It keeps a local copy (`transactions_view`) fed by Kafka events. This removes any HTTP coupling between llm-ms and transactions-ms, and gives it resilience: even if transactions-ms is down, the chat still works.
 
-### Retries con backoff exponencial + DLQ
-El wrapper de consumer en `pkg/kafka` reintenta hasta 3 veces con backoff exponencial (1s, 2s, 4s). Si después de los retries el mensaje sigue fallando, se publica a un topic `dlq` con headers que indican el error original y el topic de origen, y se commitea el offset para no bloquear la partición (poison message).
+### Retries with exponential backoff + DLQ
+The consumer wrapper in `pkg/kafka` retries up to 3 times with exponential backoff (1s, 2s, 4s). After all retries, the message is published to a `dlq` topic with headers indicating the original error and source topic, and the offset is committed so the partition is not blocked (poison message).
 
-### Validación en 3 capas
-1. **Sintáctica** (handler HTTP): tags de validator/v10 chequean tipos, formatos, rangos. Devuelve `422` con detalles por campo.
-2. **Negocio** (service): reglas como "saldo suficiente", "misma moneda en transferencia". Errores tipados en `domain/errors.go`.
-3. **DB constraints** (migrations): `CHECK (balance >= 0)`, `UNIQUE (idempotency_key)`, `CHECK (amount > 0)`, `FOREIGN KEY`. Es la última línea de defensa: aunque haya un bug en el código, Postgres rechaza la operación.
+### Validation in 3 layers
+1. **Syntactic** (HTTP handler): validator/v10 tags check types, formats, ranges. Returns `422` with field-level details.
+2. **Business** (service): rules like "enough balance", "same currency on both sides". Typed errors in `domain/errors.go`.
+3. **DB constraints** (migrations): `CHECK (balance >= 0)`, `UNIQUE (idempotency_key)`, `CHECK (amount > 0)`, `FOREIGN KEY`. The last line of defense: even with a bug in the code, Postgres rejects the operation.
 
-## Decisiones técnicas y trade-offs
+## Technical decisions and trade-offs
 
-### Por qué Apache Kafka en KRaft mode
-El enunciado pide Kafka literalmente. Uso KRaft mode (sin Zookeeper) porque desde Kafka 3.3+ es production-ready y se elimina toda la complejidad operativa de Zookeeper. Footprint mucho menor (~700MB vs ~1.5GB), arranque más rápido, y un solo proceso a operar.
+### Why Apache Kafka in KRaft mode
+The challenge literally asks for Kafka. I use KRaft mode (no Zookeeper) because since Kafka 3.3+ it has been production-ready and removes all of Zookeeper's operational complexity. Much smaller footprint (~700MB vs ~1.5GB), faster startup, and only one process to operate.
 
-### Por qué sin ORM (pgx + SQL crudo)
-Las queries son simples y pocas (5-6 por servicio). Un ORM agregaría magia y complejidad sin aportar valor. pgx con SQL crudo es más idiomático en Go senior y se lee directamente. **No introduce vulnerabilidades**: todas las queries usan placeholders (`$1, $2`), nunca string concatenation, así que SQL injection es imposible.
+### Why no ORM (pgx + raw SQL)
+Queries are simple and few (5-6 per service). An ORM would add magic and complexity without adding value. pgx with raw SQL is more idiomatic in senior Go and reads directly. **It does not introduce vulnerabilities**: every query uses placeholders (`$1, $2`), never string concatenation, so SQL injection is impossible.
 
-Si fuera un proyecto con 30+ queries, evaluaría `sqlc` (genera código Go type-safe desde archivos `.sql`), que es la opción moderna en Go senior. Para este tamaño es over-engineering.
+If this were a project with 30+ queries, I would consider `sqlc` (generates type-safe Go code from `.sql` files), which is the modern senior Go option. For this size it would be over-engineering.
 
-### Por qué chi sobre Gin/Echo/Fiber
-chi es el único router del top de Go que es **100% compatible con `net/http` estándar**. Eso significa que cualquier middleware del ecosistema Go funciona sin adaptadores. Gin/Echo tienen su propio `Context` y rompen esa compatibilidad. Fiber usa `fasthttp` que es otro stack HTTP completamente. chi es lo que un dev Go senior elige cuando quiere una librería sin magia.
+### Why chi over Gin/Echo/Fiber
+chi is the only top Go router that is **100% compatible with `net/http` standard**. That means any middleware in the Go ecosystem works without adapters. Gin/Echo have their own `Context` and break that compatibility. Fiber uses `fasthttp`, a different HTTP stack altogether. chi is what a senior Go dev picks when they want a no-magic library.
 
-### Por qué Materialized View en llm-ms en vez de llamar HTTP a transactions-ms
-Tres opciones eran posibles:
+### Why a materialized view in llm-ms instead of HTTP-calling transactions-ms
+Three options were possible:
 
-| Opción | Acoplamiento | Resiliencia | Performance |
+| Option | Coupling | Resilience | Performance |
 |---|---|---|---|
-| Front pasa contexto en cada request | Bajo | Alta | Buena |
-| llm-ms hace HTTP a transactions-ms | Alto | Baja | Mala (1 hop extra) |
-| **Materialized view local** ✅ | **Cero** | **Total** | **Excelente** |
+| Front passes context on every request | Low | High | Good |
+| llm-ms does HTTP to transactions-ms | High | Low | Bad (1 extra hop) |
+| **Local materialized view** ✅ | **Zero** | **Total** | **Excellent** |
 
-El materialized view es el patrón ortodoxo en arquitecturas event-driven: cada servicio mantiene los datos que necesita en su propio storage, alimentado por eventos. Trade-off: pequeña duplicación de datos y eventual consistency (delay de ms entre transactions-ms y llm-ms, irrelevante para el chat).
+The materialized view is the orthodox pattern in event-driven architectures: each service keeps the data it needs in its own storage, fed by events. Trade-off: small data duplication and eventual consistency (ms-level delay between transactions-ms and llm-ms, irrelevant for the chat).
 
-### Sync vs Async — cuándo cada uno
+### Sync vs Async — when each one
 
-| Operación | Tipo | Por qué |
+| Operation | Type | Why |
 |---|---|---|
-| Crear cliente / cuenta | HTTP sync | Acción inmediata del usuario, una sola DB |
-| Consultar saldo | HTTP sync | Lectura simple |
-| Iniciar transferencia | HTTP async (202) + Kafka | Coordinación entre 2 ms, queremos desacoplar |
-| Generar explicación de tx | Kafka consumer (background) | Reacción a evento de negocio, no la pide el usuario |
-| Chat con LLM | HTTP sync con SSE streaming | Interacción usuario↔sistema, no es un evento de negocio |
-| Ver explicación | HTTP sync | Lectura del cache local |
+| Create client / account | HTTP sync | Immediate user action, single DB |
+| Check balance | HTTP sync | Simple read |
+| Start transfer | HTTP async (202) + Kafka | Coordination between 2 services, we want decoupling |
+| Generate tx explanation | Kafka consumer (background) | Reaction to a business event, not user-initiated |
+| Chat with LLM | HTTP sync with SSE streaming | User↔system interaction, not a business event |
+| Read explanation | HTTP sync | Read from local cache |
 
-**Regla**: usar async/eventos cuando hay desacoplamiento real entre productores y consumidores. Usar sync cuando hay request-response inmediato. **No forzar event-driven donde no aporta.**
+**Rule**: use async/events when there is real decoupling between producers and consumers. Use sync when there is immediate request-response. **Don't force event-driven where it doesn't add value.**
 
 ### Stateless chat
-Los LLMs son stateless por diseño. La continuidad del chat se logra enviando el historial completo en cada request. En nuestro caso, el front mantiene el array `messages` en React state y lo manda completo al backend. Sin tablas de sesiones, sin auth, sin complejidad. Es lo que hace ChatGPT en interfaces sin login.
+LLMs are stateless by design. Continuity in the chat is achieved by sending the full message history on each request. In our case, the front keeps the `messages` array in React state and sends it whole to the backend. No session tables, no auth, no complexity. It is what ChatGPT does in non-logged-in interfaces.
 
-### SSE en vez de WebSockets para el chat
-SSE (Server-Sent Events) es más simple que WebSockets para comunicación unidireccional servidor→cliente. Es HTTP normal con `Content-Type: text/event-stream`, sin protocolo aparte. WebSockets sería overkill — el chat no necesita comunicación bidireccional simultánea, solo streaming de la respuesta del LLM.
+### SSE instead of WebSockets for the chat
+SSE (Server-Sent Events) is simpler than WebSockets for unidirectional server→client communication. It is plain HTTP with `Content-Type: text/event-stream`, no separate protocol. WebSockets would be overkill — the chat does not need simultaneous bidirectional communication, just streaming the LLM response.
 
-**Costo**: el streaming de Claude API NO cuesta más que el non-streaming. Los tokens facturados son los mismos. Solo cambia cómo se entregan.
+**Cost**: streaming via the Claude API does NOT cost more than non-streaming. The same tokens are billed. Only the delivery method changes.
 
-### Kafka UI en vez de endpoint custom de "debug stream"
-Inicialmente pensé en hacer un endpoint `/debug/events` en cada microservicio para que el front mostrara los eventos Kafka en vivo en su panel. Lo descarté: ya existe Kafka UI (provectus), gratis, profesional, hace eso y mucho más sin escribir una sola línea de código custom. El panel del front se queda con HTTP requests y SSE chunks, Kafka UI se queda con la inspección del bus.
+### Kafka UI instead of a custom "debug stream" endpoint
+At first I considered making a `/debug/events` endpoint in each microservice so the front would show Kafka events live in its panel. I dropped it: Kafka UI (provectus) already exists, is free, professional, does that and much more without writing a single line of custom code. The front panel sticks to HTTP requests and SSE chunks; Kafka UI takes care of bus inspection.
 
-## Estructura del repo
+## Repo structure
 
 ```
 banking-platform-go/
-├── go.work                       # Go workspace con los 4 módulos
-├── docker-compose.yml            # Levanta TODO con un solo comando
+├── go.work                       # Go workspace with the 4 modules
+├── docker-compose.yml            # Brings up EVERYTHING with one command
 ├── .env.example
-├── README.md                     # este archivo
+├── README.md                     # this file
 │
-├── pkg/                          # código compartido entre microservicios
-│   ├── events/                   # envelope, tipos, topics, payloads
-│   ├── kafka/                    # producer + consumer con retry/DLQ
-│   ├── outbox/                   # worker del patrón outbox
-│   └── httpx/                    # helpers HTTP (validación, errores, middlewares)
+├── pkg/                          # code shared across microservices
+│   ├── events/                   # envelope, types, topics, payloads
+│   ├── kafka/                    # producer + consumer with retry/DLQ
+│   ├── outbox/                   # outbox-pattern worker
+│   └── httpx/                    # HTTP helpers (validation, errors, middlewares)
 │
 ├── services/
-│   ├── accounts-ms/              # clientes y cuentas
+│   ├── accounts-ms/              # clients and accounts
 │   │   ├── cmd/main.go           # composition root
 │   │   ├── internal/
 │   │   │   ├── config/           # env vars
-│   │   │   ├── domain/           # entidades + errores tipados
-│   │   │   ├── repo/             # acceso a Postgres con pgx
-│   │   │   ├── service/          # casos de uso + handler de Kafka
-│   │   │   └── http/             # handlers chi + router + middlewares
+│   │   │   ├── domain/           # entities + typed errors
+│   │   │   ├── repo/             # Postgres access via pgx
+│   │   │   ├── service/          # use cases + Kafka handler
+│   │   │   └── http/             # chi handlers + router + middlewares
 │   │   ├── migrations/           # *.up.sql / *.down.sql
 │   │   └── Dockerfile
-│   ├── transactions-ms/          # idem
-│   └── llm-ms/                   # idem + interno explainer/ con Claude/Mock
+│   ├── transactions-ms/          # same shape
+│   └── llm-ms/                   # same shape + internal explainer/ with Claude/Mock
 │
-├── web/                          # frontend Next.js
+├── web/                          # Next.js frontend
 │   ├── app/                      # App Router (pages)
 │   ├── components/               # ActivityPanel, TransactionChat
 │   ├── lib/                      # api.ts (fetch wrapper) + activityStore.ts
 │   └── Dockerfile
 │
 └── test/
-    └── e2e/                      # test e2e (build tag e2e)
+    └── e2e/                      # e2e test (e2e build tag)
 ```
 
-**Hexagonal lite**: cada servicio Go tiene 4 capas (`domain` → `repo` → `service` → `http`). `domain` no conoce nada de infraestructura. Cada capa solo conoce a la de abajo. `main.go` es el composition root: el único lugar donde se "arma" todo.
+**Hexagonal lite**: each Go service has 4 layers (`domain` → `repo` → `service` → `http`). `domain` knows nothing about infrastructure. Each layer only knows the one below. `main.go` is the composition root: the only place where everything is wired together.
 
 ## Tests
 
 ### Unit tests
 
 ```bash
-# desde la raíz
+# from the repo root
 cd services/accounts-ms && go test ./...
 cd services/transactions-ms && go test ./...
 cd services/llm-ms && go test ./...
 cd pkg && go test ./...
 ```
 
-Cubren la lógica core: máquinas de estados, validaciones de saldo, idempotencia, explainer con mock determinista, round-trip de envelopes.
+They cover the core logic: state machines, balance validation, idempotency, explainer with deterministic mock, envelope round-trip.
 
-### Test E2E
+### E2E test
 
-Asume que el sistema está corriendo:
+Assumes the system is up:
 
 ```bash
 docker compose up -d
 go test -tags=e2e ./test/e2e/... -v
 ```
 
-Cubre dos flujos:
+Covers two flows:
 
-1. **Happy path**: crear cliente → 2 cuentas → depositar → transferir → verificar saldos finales → verificar que el LLM generó la explicación.
-2. **Rejected**: intentar transferir más de lo que hay → verificar que la transacción queda en `REJECTED` con `rejection_code=insufficient_funds` → verificar que el LLM también generó la explicación del rechazo.
+1. **Happy path**: create client → 2 accounts → deposit → transfer → verify final balances → verify the LLM generated the explanation.
+2. **Rejected**: try to transfer more than available → verify the transaction ends in `REJECTED` with `rejection_code=insufficient_funds` → verify the LLM also generated the rejection explanation.
 
-## Qué dejaría para una v2
+## What I would leave for v2
 
-Cosas que un sistema en producción tendría pero que están fuera de scope para un challenge:
+Things a production system would have but are out of scope for a challenge:
 
-- **Auth y autorización**: hoy no hay JWT, OAuth, ni nada. En producción usaría JWT con un IdP externo y gating en cada endpoint.
-- **ACLs en Kafka**: hoy el aislamiento entre microservicios es por convención (cada topic tiene un dueño claro). En producción configuraría ACLs SASL/SSL para enforcar a nivel de broker.
-- **Métricas y tracing**: agregaría Prometheus + Grafana + OpenTelemetry para distributed tracing entre microservicios. El RequestID que ya propago en cada HTTP serviría como base.
-- **Retry topics en vez de in-process retries**: para no bloquear la partición durante reintentos largos, publicaría a topics `retry.5s`, `retry.30s`, etc., al estilo Uber.
-- **CDC con Debezium**: el outbox actual usa polling con worker. Debezium permitiría empujar las filas a Kafka instantáneamente vía replicación lógica de Postgres.
-- **Persistencia de sesiones de chat**: hoy el chat es stateless en el backend. Para usuarios autenticados, guardaría las conversaciones en una tabla `chat_sessions` para que puedan retomarse.
-- **Más unit tests con sqlmock o testcontainers**: hoy los unit tests cubren la lógica pura. Agregaría tests de los repos contra una DB real efímera.
-- **Multi-currency con conversión**: las transferencias hoy requieren misma moneda. Una v2 podría hacer conversión con rates en tiempo real.
-- **Auditoría más rica**: el outbox ya es un log de cambios, pero agregaría una tabla `audit_log` separada con quién hizo cada cosa.
+- **Auth and authorization**: today there is no JWT, OAuth, or anything. In production I would use JWT with an external IdP and gating on every endpoint.
+- **Kafka ACLs**: today the isolation between microservices is by convention (each topic has a clear owner). In production I would set up SASL/SSL ACLs to enforce it at the broker level.
+- **Metrics and tracing**: I would add Prometheus + Grafana + OpenTelemetry for distributed tracing across services. The RequestID I already propagate over HTTP would serve as a baseline.
+- **Retry topics instead of in-process retries**: to avoid blocking the partition during long retries, I would publish to `retry.5s`, `retry.30s` topics in the Uber style.
+- **CDC with Debezium**: the current outbox uses polling with a worker. Debezium would let me push rows into Kafka instantly via Postgres logical replication.
+- **Persistent chat sessions**: today the chat is stateless on the backend. For authenticated users I would store conversations in a `chat_sessions` table so they can be resumed.
+- **More unit tests with sqlmock or testcontainers**: today the unit tests cover the pure logic. I would add tests for the repos against a real ephemeral DB.
+- **Multi-currency with conversion**: transfers today require the same currency. A v2 could perform real-time conversion with rates.
+- **Richer auditing**: the outbox is already a change log, but I would add a separate `audit_log` table with who did what.
 
 ---
 
-**Repositorio**: https://github.com/j0sehernan/banking-platform-go
+**Repository**: https://github.com/j0sehernan/banking-platform-go

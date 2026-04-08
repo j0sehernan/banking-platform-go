@@ -20,9 +20,9 @@ func NewTransactionRepo(db DBTX) *TransactionRepo {
 	return &TransactionRepo{db: db}
 }
 
-// Create inserta una transacción nueva. Si el idempotency_key ya existe,
-// devuelve ErrDuplicateIdempotencyKey y el caller puede recuperar la
-// transacción existente con GetByIdempotencyKey.
+// Create inserts a new transaction. If the idempotency_key already
+// exists, returns ErrDuplicateIdempotencyKey and the caller can fetch
+// the existing one with GetByIdempotencyKey.
 func (r *TransactionRepo) Create(ctx context.Context, t domain.Transaction) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO transactions
@@ -41,7 +41,7 @@ func (r *TransactionRepo) Create(ctx context.Context, t domain.Transaction) erro
 	return nil
 }
 
-// GetByID lee una transacción por id.
+// GetByID reads a transaction by id.
 func (r *TransactionRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Transaction, error) {
 	return r.querySingle(ctx,
 		`SELECT id, type, from_account_id, to_account_id, amount, currency, status,
@@ -52,7 +52,7 @@ func (r *TransactionRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Tr
 	)
 }
 
-// GetByIdempotencyKey busca una transacción por su idempotency_key.
+// GetByIdempotencyKey looks up a transaction by its idempotency_key.
 func (r *TransactionRepo) GetByIdempotencyKey(ctx context.Context, key string) (*domain.Transaction, error) {
 	return r.querySingle(ctx,
 		`SELECT id, type, from_account_id, to_account_id, amount, currency, status,
@@ -79,7 +79,7 @@ func (r *TransactionRepo) querySingle(ctx context.Context, sql string, args ...a
 	return &t, nil
 }
 
-// MarkCompleted actualiza el estado a COMPLETED.
+// MarkCompleted updates the state to COMPLETED.
 func (r *TransactionRepo) MarkCompleted(ctx context.Context, id uuid.UUID) error {
 	tag, err := r.db.Exec(ctx,
 		`UPDATE transactions
@@ -91,13 +91,13 @@ func (r *TransactionRepo) MarkCompleted(ctx context.Context, id uuid.UUID) error
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		// no estaba en PENDING o no existe, ambos casos los tratamos igual
+		// either it was not in PENDING or does not exist; treat both equally
 		return nil
 	}
 	return nil
 }
 
-// MarkRejected actualiza el estado a REJECTED con razón.
+// MarkRejected updates the state to REJECTED with a reason.
 func (r *TransactionRepo) MarkRejected(ctx context.Context, id uuid.UUID, code, msg string) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE transactions
@@ -108,7 +108,7 @@ func (r *TransactionRepo) MarkRejected(ctx context.Context, id uuid.UUID, code, 
 	return err
 }
 
-// ListAll devuelve todas las transacciones (las últimas 100).
+// ListAll returns all transactions (the latest 100).
 func (r *TransactionRepo) ListAll(ctx context.Context) ([]domain.Transaction, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, type, from_account_id, to_account_id, amount, currency, status,
@@ -136,7 +136,7 @@ func (r *TransactionRepo) ListAll(ctx context.Context) ([]domain.Transaction, er
 	return txs, rows.Err()
 }
 
-// ListByAccount devuelve las transacciones donde la cuenta es origen o destino.
+// ListByAccount returns transactions where the account is source or destination.
 func (r *TransactionRepo) ListByAccount(ctx context.Context, accountID uuid.UUID) ([]domain.Transaction, error) {
 	rows, err := r.db.Query(ctx,
 		`SELECT id, type, from_account_id, to_account_id, amount, currency, status,

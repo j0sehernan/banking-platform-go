@@ -36,7 +36,7 @@ export default function HomePage() {
         <div>
           <h1 className="text-2xl font-bold">🏦 Banking Platform</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Demo event-driven con Go + Kafka + Claude · revisá el panel derecho para ver los requests
+            Event-driven demo with Go + Kafka + Claude · check the right panel to inspect requests
           </p>
         </div>
         <div className="flex gap-2">
@@ -44,30 +44,30 @@ export default function HomePage() {
             onClick={() => setShowNewClient(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
-            + Cliente
+            + Client
           </button>
           <button
             onClick={() => setShowNewAccount(true)}
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium"
           >
-            + Cuenta
+            + Account
           </button>
           <Link
             href="/transfer"
             className="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 text-sm font-medium"
           >
-            Transferir →
+            Transfer →
           </Link>
         </div>
       </header>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Cuentas</h2>
+        <h2 className="text-lg font-semibold mb-3">Accounts</h2>
         {loading ? (
-          <div className="text-slate-500 text-sm">Cargando...</div>
+          <div className="text-slate-500 text-sm">Loading...</div>
         ) : accounts.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 p-6 text-center text-slate-500 text-sm">
-            No hay cuentas todavía. Creá un cliente y luego una cuenta.
+            No accounts yet. Create a client and then an account.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -80,7 +80,7 @@ export default function HomePage() {
                       {acc.balance} <span className="text-sm font-normal text-slate-500">{acc.currency}</span>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-400">cliente: {acc.client_id.slice(0, 8)}...</div>
+                  <div className="text-xs text-slate-400">client: {acc.client_id.slice(0, 8)}...</div>
                 </div>
               </div>
             ))}
@@ -89,10 +89,10 @@ export default function HomePage() {
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">Transacciones recientes</h2>
+        <h2 className="text-lg font-semibold mb-3">Recent transactions</h2>
         {transactions.length === 0 ? (
           <div className="bg-white rounded-lg border border-slate-200 p-6 text-center text-slate-500 text-sm">
-            Aún no hay transacciones.
+            No transactions yet.
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100">
@@ -113,7 +113,7 @@ export default function HomePage() {
                   <div className="text-sm font-semibold">
                     {tx.amount} {tx.currency}
                   </div>
-                  <div className="text-xs text-slate-400">{new Date(tx.created_at).toLocaleString('es')}</div>
+                  <div className="text-xs text-slate-400">{new Date(tx.created_at).toLocaleString('en')}</div>
                 </div>
               </Link>
             ))}
@@ -162,9 +162,9 @@ function NewClientModal({ onClose, onCreated }: { onClose: () => void; onCreated
   };
 
   return (
-    <Modal onClose={onClose} title="Nuevo cliente">
+    <Modal onClose={onClose} title="New client">
       <form onSubmit={submit} className="space-y-3">
-        <Input label="Nombre" value={name} onChange={setName} required />
+        <Input label="Name" value={name} onChange={setName} required />
         <Input label="Email" value={email} onChange={setEmail} type="email" required />
         {error && <div className="text-red-600 text-xs">{error}</div>}
         <button
@@ -172,7 +172,7 @@ function NewClientModal({ onClose, onCreated }: { onClose: () => void; onCreated
           disabled={submitting}
           className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
         >
-          {submitting ? 'Creando...' : 'Crear cliente'}
+          {submitting ? 'Creating...' : 'Create client'}
         </button>
       </form>
     </Modal>
@@ -201,11 +201,11 @@ function NewAccountModal({ onClose, onCreated }: { onClose: () => void; onCreate
   };
 
   return (
-    <Modal onClose={onClose} title="Nueva cuenta">
+    <Modal onClose={onClose} title="New account">
       <form onSubmit={submit} className="space-y-3">
         <Input label="Client ID (UUID)" value={clientID} onChange={setClientID} required />
         <div>
-          <label className="text-xs font-medium text-slate-700">Moneda</label>
+          <label className="text-xs font-medium text-slate-700">Currency</label>
           <select
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
@@ -222,7 +222,7 @@ function NewAccountModal({ onClose, onCreated }: { onClose: () => void; onCreate
           disabled={submitting}
           className="w-full bg-emerald-600 text-white rounded py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
         >
-          {submitting ? 'Creando...' : 'Crear cuenta'}
+          {submitting ? 'Creating...' : 'Create account'}
         </button>
       </form>
     </Modal>

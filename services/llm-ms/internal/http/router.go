@@ -15,7 +15,7 @@ func NewRouter(h *Handler, logger *slog.Logger) http.Handler {
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
-	// NOTA: timeout 5min para soportar streams largos del LLM
+	// NOTE: 5min timeout to support long LLM streams
 	r.Use(middleware.Timeout(5 * time.Minute))
 	r.Use(httpx.CORS)
 	r.Use(httpx.SlogLogger(logger))
@@ -27,7 +27,7 @@ func NewRouter(h *Handler, logger *slog.Logger) http.Handler {
 
 	r.Get("/transactions/{id}/explanation", httpx.Wrap(h.GetExplanation))
 
-	// Chat NO usa httpx.Wrap porque maneja headers SSE manualmente
+	// Chat does NOT use httpx.Wrap because it handles SSE headers manually
 	r.Post("/chat", h.Chat)
 
 	return r

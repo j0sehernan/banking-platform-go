@@ -1,6 +1,6 @@
-// Package service tiene los casos de uso del llm-ms.
-// Este servicio NO tiene lógica bancaria — solo refleja transacciones
-// (vista materializada) y delega al Explainer para generar texto.
+// Package service has the use cases of llm-ms.
+// This service has NO banking logic — it only mirrors transactions
+// (materialized view) and delegates to the Explainer to generate text.
 package service
 
 import (
@@ -22,28 +22,28 @@ func NewLLMService(pool *pgxpool.Pool, exp explainer.Explainer) *LLMService {
 	return &LLMService{pool: pool, explainer: exp}
 }
 
-// GetExplanation devuelve la explicación cacheada de una transacción.
-// Si no existe, devuelve ErrExplanationNotFound (404 al cliente).
+// GetExplanation returns the cached explanation of a transaction.
+// If it doesn't exist, returns ErrExplanationNotFound (404 to the client).
 func (s *LLMService) GetExplanation(ctx context.Context, txID uuid.UUID) (*domain.Explanation, error) {
 	r := repo.NewExplanationRepo(s.pool)
 	return r.GetByTxID(ctx, txID)
 }
 
-// GetTransactionView devuelve la copia local de una transacción.
-// Lo usa el chat handler para construir el contexto.
+// GetTransactionView returns the local copy of a transaction.
+// Used by the chat handler to build the context.
 func (s *LLMService) GetTransactionView(ctx context.Context, txID uuid.UUID) (*domain.TransactionView, error) {
 	r := repo.NewTransactionsViewRepo(s.pool)
 	return r.GetByID(ctx, txID)
 }
 
-// ChatStream abre un stream con el LLM scoped a una transacción.
-// El caller (handler HTTP) debe iterar el stream y escribir SSE.
+// ChatStream opens a stream with the LLM scoped to a transaction.
+// The caller (HTTP handler) must iterate the stream and write SSE.
 func (s *LLMService) ChatStream(ctx context.Context, tx *domain.TransactionView, messages []domain.ChatMessage) (explainer.Stream, error) {
 	return s.explainer.ChatStream(ctx, tx, messages)
 }
 
-// Explainer devuelve el explainer (lo necesita el consumer para
-// generar la explicación inicial al recibir el evento de transacción).
+// Explainer returns the explainer (the consumer needs it to generate
+// the initial explanation when receiving the transaction event).
 func (s *LLMService) Explainer() explainer.Explainer {
 	return s.explainer
 }

@@ -8,8 +8,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// SlogLogger es un middleware chi que loguea cada request con slog
-// estructurado, usando el request_id que setea middleware.RequestID.
+// SlogLogger is a chi middleware that logs each request with structured
+// slog, using the request_id set by middleware.RequestID.
 func SlogLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,8 +30,8 @@ func SlogLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// CORS minimalista para que el front pueda llamar a los microservicios
-// desde el browser. En producción esto sería más estricto.
+// CORS minimal middleware so the front can call the microservices from
+// the browser. In production this would be stricter.
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

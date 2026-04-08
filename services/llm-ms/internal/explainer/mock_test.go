@@ -15,17 +15,17 @@ import (
 func TestMockExplainer_ExplainTransaction(t *testing.T) {
 	m := NewMockExplainer()
 	tx := &domain.TransactionView{
-		ID:       uuid.New(),
-		Type:     "TRANSFER",
-		Status:   "REJECTED",
-		Amount:   decimal.RequireFromString("500.00"),
-		Currency: "USD",
-		RejectionMsg: "no había saldo suficiente",
+		ID:           uuid.New(),
+		Type:         "TRANSFER",
+		Status:       "REJECTED",
+		Amount:       decimal.RequireFromString("500.00"),
+		Currency:     "USD",
+		RejectionMsg: "insufficient funds",
 	}
 
 	out, err := m.ExplainTransaction(context.Background(), tx)
 	assert.NoError(t, err)
-	assert.Contains(t, out, "rechazada")
+	assert.Contains(t, out, "rejected")
 	assert.Contains(t, out, "500")
 	assert.Contains(t, out, "USD")
 }
@@ -39,7 +39,7 @@ func TestMockExplainer_ChatStream(t *testing.T) {
 		Currency: "USD",
 	}
 	messages := []domain.ChatMessage{
-		{Role: "user", Content: "qué pasó?"},
+		{Role: "user", Content: "what happened?"},
 	}
 
 	stream, err := m.ChatStream(context.Background(), tx, messages)
@@ -57,5 +57,5 @@ func TestMockExplainer_ChatStream(t *testing.T) {
 	}
 
 	assert.Contains(t, collected, "mock")
-	assert.Contains(t, collected, "qué pasó?")
+	assert.Contains(t, collected, "what happened?")
 }

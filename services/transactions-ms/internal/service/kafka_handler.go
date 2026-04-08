@@ -9,8 +9,8 @@ import (
 	pkgkafka "github.com/j0sehernan/banking-platform-go/pkg/kafka"
 )
 
-// AccountsResultHandler escucha el topic accounts.tx-results y delega
-// al service para que cierre el ciclo del saga.
+// AccountsResultHandler listens to the accounts.tx-results topic and
+// delegates to the service to close the saga loop.
 type AccountsResultHandler struct {
 	svc    *TransactionService
 	logger *slog.Logger
@@ -30,7 +30,7 @@ func (h *AccountsResultHandler) Handle(ctx context.Context, msg pkgkafka.Message
 	case events.EventAccountsTransferApplied, events.EventAccountsTransferFailed:
 		return h.svc.HandleAccountsResult(ctx, env.EventID, env.EventType, env.Payload)
 	default:
-		// no es nuestro evento, ignoramos sin error
+		// not our event, ignore without error
 		return nil
 	}
 }

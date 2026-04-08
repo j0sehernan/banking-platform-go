@@ -1,5 +1,5 @@
-// Package config carga las variables de entorno en un struct tipado.
-// Usar caarlos0/env mantiene el código limpio y declarativo.
+// Package config loads environment variables into a typed struct.
+// Using caarlos0/env keeps the code clean and declarative.
 package config
 
 import "github.com/caarlos0/env/v11"

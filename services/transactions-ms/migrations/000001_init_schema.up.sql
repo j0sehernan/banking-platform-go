@@ -1,10 +1,10 @@
--- Tabla principal de transacciones.
+-- Main transactions table.
 --
--- Constraints clave:
---  * idempotency_key UNIQUE → garantiza no duplicados (cliente puede reintentar)
---  * CHECK (amount > 0)     → no permite montos cero o negativos
---  * CHECK (status IN ...)  → enforce de la máquina de estados a nivel DB
---  * CHECK (type IN ...)    → enforce de tipos válidos
+-- Key constraints:
+--  * idempotency_key UNIQUE → guarantees no duplicates (client can retry)
+--  * CHECK (amount > 0)     → no zero or negative amounts
+--  * CHECK (status IN ...)  → state machine enforcement at the DB level
+--  * CHECK (type IN ...)    → only valid types
 
 CREATE TABLE transactions (
     id               UUID PRIMARY KEY,

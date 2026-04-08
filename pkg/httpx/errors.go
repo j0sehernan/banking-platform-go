@@ -1,9 +1,9 @@
-// Package httpx contiene helpers HTTP compartidos: validación, manejo de
-// errores con formato estándar, decode genérico, y un wrapper para handlers
-// que devuelven error.
+// Package httpx contains shared HTTP helpers: validation, error handling
+// with a standard format, generic decode, and a wrapper for handlers
+// that return error.
 //
-// La idea es que cada handler quede en ~15 líneas sin código de error
-// duplicado en cada uno.
+// The goal is that each handler stays around ~15 lines without duplicating
+// error-handling code in every one.
 package httpx
 
 import (
@@ -15,8 +15,8 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// Error es nuestro error tipado para responses HTTP.
-// Implementa error y se mapea a status codes en WriteError.
+// Error is our typed error for HTTP responses.
+// Implements error and is mapped to a status code in WriteError.
 type Error struct {
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
@@ -28,13 +28,13 @@ func (e *Error) Error() string {
 	return e.Code + ": " + e.Message
 }
 
-// NewError construye un Error con código snake_case y mensaje user-friendly.
+// NewError builds an Error with a snake_case code and a user-friendly message.
 func NewError(status int, code, message string) *Error {
 	return &Error{Status: status, Code: code, Message: message}
 }
 
-// errorEnvelope es el formato JSON estándar de error response.
-// Mantenerlo en un solo lugar facilita que el front lo consuma siempre igual.
+// errorEnvelope is the standard JSON format for an error response.
+// Keeping it in a single place lets the front consume it consistently.
 type errorEnvelope struct {
 	Error errorBody `json:"error"`
 }
@@ -46,9 +46,10 @@ type errorBody struct {
 	RequestID string         `json:"request_id,omitempty"`
 }
 
-// WriteError serializa un error como JSON con el status apropiado.
-// Si el error es un *Error usa su status. Si no, intenta mapear errores
-// comunes (registrados con RegisterDomainError). Como último recurso, 500.
+// WriteError serializes an error as JSON with the appropriate status.
+// If the error is a *Error it uses its status. Otherwise it tries to
+// map common errors (registered via RegisterDomainError). As a last
+// resort, returns 500.
 func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	requestID := middleware.GetReqID(r.Context())
 
@@ -65,7 +66,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 
-	// Mapeo de errores de dominio registrados
+	// Mapping of registered domain errors
 	if mapped := lookupDomainError(err); mapped != nil {
 		writeJSON(w, mapped.Status, errorEnvelope{
 			Error: errorBody{
@@ -82,13 +83,13 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	writeJSON(w, http.StatusInternalServerError, errorEnvelope{
 		Error: errorBody{
 			Code:      "internal_error",
-			Message:   "Ocurrió un error inesperado",
+			Message:   "An unexpected error occurred",
 			RequestID: requestID,
 		},
 	})
 }
 
-// WriteJSON serializa cualquier valor como JSON con status code dado.
+// WriteJSON serializes any value as JSON with the given status code.
 func WriteJSON(w http.ResponseWriter, status int, payload any) {
 	writeJSON(w, status, payload)
 }
@@ -101,16 +102,16 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
-// ===== Registro de errores de dominio =====
+// ===== Domain error registration =====
 //
-// Cada microservicio puede registrar sus errores tipados con su mapeo
-// HTTP correspondiente al inicio de main(). Así el handler solo hace
-// `return err` y el wrapper se encarga del status code.
+// Each microservice can register its typed errors with their HTTP
+// mapping at the start of main(). That way handlers just `return err`
+// and the wrapper takes care of the status code.
 
 var domainErrors = map[error]*Error{}
 
-// RegisterDomainError mapea un error de dominio a un Error HTTP.
-// Llamar al inicio del programa.
+// RegisterDomainError maps a domain error to an HTTP Error.
+// Call at program startup.
 func RegisterDomainError(domainErr error, apiErr *Error) {
 	domainErrors[domainErr] = apiErr
 }

@@ -1,6 +1,6 @@
-// Package service implementa los casos de uso de transactions-ms.
-// El servicio inicia las transacciones (HTTP) y reacciona a las
-// respuestas de accounts-ms (Kafka) para cerrar el ciclo del saga.
+// Package service implements the use cases for transactions-ms.
+// The service starts transactions (HTTP) and reacts to the responses
+// from accounts-ms (Kafka) to close the saga loop.
 package service
 
 import (
@@ -25,9 +25,9 @@ func NewTransactionService(pool *pgxpool.Pool) *TransactionService {
 	return &TransactionService{pool: pool}
 }
 
-// CreateCommand son los datos para crear una transacción nueva.
-// El campo Type indica si es DEPOSIT, WITHDRAW o TRANSFER y según
-// eso From/To son requeridos o no (se valida acá).
+// CreateCommand carries the data to create a new transaction.
+// The Type field tells whether it is DEPOSIT, WITHDRAW or TRANSFER and
+// from there From/To are required or not (validated here).
 type CreateCommand struct {
 	Type           string
 	FromAccountID  *uuid.UUID
@@ -37,11 +37,11 @@ type CreateCommand struct {
 	IdempotencyKey string
 }
 
-// Create inicia una nueva transacción: la persiste en estado PENDING
-// y publica TransactionRequested via outbox. Todo en una sola tx PG.
+// Create starts a new transaction: persists it as PENDING and publishes
+// TransactionRequested via outbox. All in a single PG transaction.
 //
-// Si el idempotency_key ya existe, devuelve la transacción existente
-// (la operación es idempotente desde el punto de vista del cliente).
+// If the idempotency_key already exists, it returns the existing
+// transaction (the operation is idempotent from the client's view).
 func (s *TransactionService) Create(ctx context.Context, cmd CreateCommand) (*domain.Transaction, error) {
 	if err := s.validateCommand(cmd); err != nil {
 		return nil, err
@@ -60,14 +60,14 @@ func (s *TransactionService) Create(ctx context.Context, cmd CreateCommand) (*do
 
 	if err := txRepo.Create(ctx, t); err != nil {
 		if errors.Is(err, domain.ErrDuplicateIdempotencyKey) {
-			// recupera la existente
+			// fetch the existing one
 			_ = tx.Rollback(ctx)
 			return s.getByIdempotencyKey(ctx, cmd.IdempotencyKey)
 		}
 		return nil, err
 	}
 
-	// publica el comando para que accounts-ms ejecute
+	// publish the command so accounts-ms executes
 	payload := events.TransactionRequestedPayload{
 		TransactionID: t.ID.String(),
 		Type:          t.Type,
@@ -101,21 +101,21 @@ func (s *TransactionService) getByIdempotencyKey(ctx context.Context, key string
 	return r.GetByIdempotencyKey(ctx, key)
 }
 
-// validateCommand chequea reglas de negocio antes de tocar la DB.
-// La validación sintáctica (formato UUID, monto > 0) ya pasó en el handler.
+// validateCommand checks business rules before touching the DB.
+// Syntactic validation (UUID format, amount > 0) was already done by the handler.
 func (s *TransactionService) validateCommand(cmd CreateCommand) error {
 	switch cmd.Type {
 	case domain.TypeDeposit:
 		if cmd.ToAccountID == nil {
-			return invalidErr("to_account_id requerido para DEPOSIT")
+			return invalidErr("to_account_id is required for DEPOSIT")
 		}
 	case domain.TypeWithdraw:
 		if cmd.FromAccountID == nil {
-			return invalidErr("from_account_id requerido para WITHDRAW")
+			return invalidErr("from_account_id is required for WITHDRAW")
 		}
 	case domain.TypeTransfer:
 		if cmd.FromAccountID == nil || cmd.ToAccountID == nil {
-			return invalidErr("from_account_id y to_account_id requeridos para TRANSFER")
+			return invalidErr("from_account_id and to_account_id are required for TRANSFER")
 		}
 		if *cmd.FromAccountID == *cmd.ToAccountID {
 			return domain.ErrSameAccountTransfer
@@ -124,35 +124,35 @@ func (s *TransactionService) validateCommand(cmd CreateCommand) error {
 		return domain.ErrInvalidTransactionType
 	}
 	if !cmd.Amount.IsPositive() {
-		return invalidErr("amount debe ser positivo")
+		return invalidErr("amount must be positive")
 	}
 	return nil
 }
 
-// GetByID lee una transacción por id.
+// GetByID reads a transaction by id.
 func (s *TransactionService) GetByID(ctx context.Context, id uuid.UUID) (*domain.Transaction, error) {
 	r := repo.NewTransactionRepo(s.pool)
 	return r.GetByID(ctx, id)
 }
 
-// ListAll devuelve todas las transacciones (las últimas 100).
+// ListAll returns all transactions (the latest 100).
 func (s *TransactionService) ListAll(ctx context.Context) ([]domain.Transaction, error) {
 	r := repo.NewTransactionRepo(s.pool)
 	return r.ListAll(ctx)
 }
 
-// ListByAccount devuelve las transacciones de una cuenta.
+// ListByAccount returns the transactions of an account.
 func (s *TransactionService) ListByAccount(ctx context.Context, accountID uuid.UUID) ([]domain.Transaction, error) {
 	r := repo.NewTransactionRepo(s.pool)
 	return r.ListByAccount(ctx, accountID)
 }
 
-// ===== handler de eventos de accounts-ms (cierra el ciclo del saga) =====
+// ===== handler for accounts-ms events (closes the saga loop) =====
 
-// HandleAccountsResult procesa los AccountsTransferApplied/Failed que
-// llegan desde accounts-ms y actualiza el estado de la transacción.
-// Después publica TransactionCompleted o TransactionRejected para que
-// el llm-ms y el front se enteren del resultado final.
+// HandleAccountsResult processes the AccountsTransferApplied/Failed
+// events that come from accounts-ms and updates the transaction state.
+// Then publishes TransactionCompleted or TransactionRejected so llm-ms
+// and the front know about the final result.
 func (s *TransactionService) HandleAccountsResult(ctx context.Context, eventID, eventType string, raw []byte) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -160,7 +160,7 @@ func (s *TransactionService) HandleAccountsResult(ctx context.Context, eventID, 
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	// idempotencia
+	// idempotency
 	processedRepo := repo.NewProcessedEventsRepo(tx)
 	isNew, err := processedRepo.MarkProcessed(ctx, eventID)
 	if err != nil {
@@ -183,7 +183,7 @@ func (s *TransactionService) HandleAccountsResult(ctx context.Context, eventID, 
 		if err != nil {
 			return err
 		}
-		// recuperar la transacción para saber sus datos
+		// fetch the transaction to know its data
 		t, err := txRepo.GetByID(ctx, txID)
 		if err != nil {
 			return err
@@ -274,7 +274,7 @@ func (s *TransactionService) publishRejected(
 	return outboxRepo.Insert(ctx, events.TopicTransactionsEvents, t.ID.String(), bytes, nil)
 }
 
-// invalidErr crea un error de validación rápido.
+// invalidErr creates a quick validation error.
 type validationError struct{ msg string }
 
 func (e *validationError) Error() string { return e.msg }

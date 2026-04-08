@@ -12,21 +12,21 @@ export function ActivityPanel() {
         <div>
           <div className="font-semibold text-sm">📡 Activity Log</div>
           <div className="text-[10px] text-slate-400 mt-0.5">
-            {entries.length} eventos · request/response del front
+            {entries.length} events · request/response from the front
           </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={togglePause}
             className="px-2 py-1 rounded bg-ink-800 hover:bg-ink-700 text-[10px]"
-            title={paused ? 'Reanudar captura' : 'Pausar captura'}
+            title={paused ? 'Resume capture' : 'Pause capture'}
           >
             {paused ? '▶' : '⏸'}
           </button>
           <button
             onClick={clear}
             className="px-2 py-1 rounded bg-ink-800 hover:bg-ink-700 text-[10px]"
-            title="Limpiar log"
+            title="Clear log"
           >
             ✕
           </button>
@@ -36,7 +36,7 @@ export function ActivityPanel() {
       <div className="p-2 space-y-1.5">
         {entries.length === 0 && (
           <div className="text-slate-500 text-center py-8 text-[11px]">
-            Aún no hay actividad. Usá la app para ver los requests acá.
+            No activity yet. Use the app to see requests show up here.
           </div>
         )}
         {entries.map((entry) => (

@@ -1,10 +1,9 @@
-// Package outbox implementa el patrón outbox: un worker que lee filas
-// pendientes de una tabla `outbox` y las publica a Kafka.
+// Package outbox implements the outbox pattern: a worker that reads
+// pending rows from an `outbox` table and publishes them to Kafka.
 //
-// Garantiza atomicidad DB+evento sin 2PC: la lógica de negocio escribe
-// el cambio de estado y la fila del outbox en la misma transacción
-// Postgres. Si la transacción commitea, ambas cosas existen. Si falla,
-// nada existe.
+// Guarantees DB+event atomicity without 2PC: business logic writes the
+// state change and the outbox row in the same Postgres transaction.
+// If the transaction commits, both exist. If it fails, neither exists.
 package outbox
 
 import (
@@ -13,7 +12,7 @@ import (
 	"time"
 )
 
-// Row representa una fila pendiente del outbox.
+// Row represents a pending row in the outbox.
 type Row struct {
 	ID      string
 	Topic   string
@@ -22,26 +21,27 @@ type Row struct {
 	Headers map[string]string
 }
 
-// Repository es la interface que cada microservicio debe implementar
-// con su propio acceso a Postgres. Mantiene a este package agnóstico
-// de pgx (lo importan los servicios).
+// Repository is the interface each microservice must implement with its
+// own Postgres access. Keeps this package independent of pgx (services
+// import pgx, this package does not).
 type Repository interface {
-	// FetchPending lee como máximo `limit` filas del outbox que aún no
-	// fueron publicadas. Debe usar `FOR UPDATE SKIP LOCKED` en Postgres
-	// para que múltiples workers puedan correr en paralelo sin pisarse.
+	// FetchPending reads up to `limit` rows from the outbox that have
+	// not been published yet. Should use `FOR UPDATE SKIP LOCKED` in
+	// Postgres so multiple workers can run in parallel without stepping
+	// on each other.
 	FetchPending(ctx context.Context, limit int) ([]Row, error)
 
-	// MarkPublished marca filas como publicadas exitosamente.
+	// MarkPublished marks rows as successfully published.
 	MarkPublished(ctx context.Context, ids []string) error
 }
 
-// Publisher es lo que el worker usa para enviar a Kafka.
-// Solo necesita publicar, no consumir.
+// Publisher is what the worker uses to send to Kafka.
+// Only needs to publish, not consume.
 type Publisher interface {
 	Publish(ctx context.Context, topic, key string, payload []byte, headers map[string]string) error
 }
 
-// Worker corre en background, lee del outbox, publica, marca como enviado.
+// Worker runs in background, reads from the outbox, publishes, marks as sent.
 type Worker struct {
 	repo      Repository
 	publisher Publisher
@@ -50,8 +50,8 @@ type Worker struct {
 	logger    *slog.Logger
 }
 
-// NewWorker crea un worker con la frecuencia y batch dados.
-// Valores razonables: interval=500ms, batchSize=100.
+// NewWorker builds a worker with the given frequency and batch size.
+// Reasonable values: interval=500ms, batchSize=100.
 func NewWorker(repo Repository, pub Publisher, interval time.Duration, batchSize int, logger *slog.Logger) *Worker {
 	return &Worker{
 		repo:      repo,
@@ -62,10 +62,10 @@ func NewWorker(repo Repository, pub Publisher, interval time.Duration, batchSize
 	}
 }
 
-// Run corre el loop hasta que el contexto se cancele.
-// Idempotente: si crash en el medio, en el próximo arranque las filas
-// no marcadas como publicadas se vuelven a procesar (puede haber duplicados
-// en Kafka, pero el consumer es idempotente vía processed_events).
+// Run runs the loop until the context is cancelled.
+// Idempotent: if it crashes mid-flight, on the next start the rows that
+// were not marked as published get reprocessed (may produce duplicates
+// in Kafka, but the consumer is idempotent via processed_events).
 func (w *Worker) Run(ctx context.Context) {
 	w.logger.Info("outbox worker started", "interval", w.interval, "batch_size", w.batchSize)
 	defer w.logger.Info("outbox worker stopped")
@@ -102,7 +102,7 @@ func (w *Worker) processOnce(ctx context.Context) error {
 				"topic", row.Topic,
 				"key", row.Key,
 			)
-			// no marcamos como publicado → reintenta en el próximo tick
+			// not marking as published → retry on next tick
 			continue
 		}
 		publishedIDs = append(publishedIDs, row.ID)

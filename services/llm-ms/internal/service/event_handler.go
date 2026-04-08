@@ -16,19 +16,19 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// EventHandler procesa eventos de transactions.events para:
-//  1) actualizar la vista materializada (transactions_view)
-//  2) generar la explicación inicial automáticamente
+// EventHandler processes events from transactions.events to:
+//  1) update the materialized view (transactions_view)
+//  2) generate the initial explanation automatically
 //
-// Los dos pasos ocurren en una sola transacción para garantizar
-// consistencia: si guardamos la explicación, también guardamos el
-// estado actualizado de la transacción.
+// Both steps run in a single transaction to keep consistency: if we
+// store the explanation we also store the updated state of the
+// transaction.
 //
-// Idempotencia: usamos processed_events como en los otros servicios.
+// Idempotency: we use processed_events as in the other services.
 type EventHandler struct {
-	pool      *pgxpool.Pool
-	svc       *LLMService
-	logger    *slog.Logger
+	pool   *pgxpool.Pool
+	svc    *LLMService
+	logger *slog.Logger
 }
 
 func NewEventHandler(pool *pgxpool.Pool, svc *LLMService, logger *slog.Logger) *EventHandler {
@@ -41,7 +41,7 @@ func (h *EventHandler) Handle(ctx context.Context, msg pkgkafka.Message) error {
 		return fmt.Errorf("invalid envelope: %w", err)
 	}
 
-	// Procesamos solo los eventos que importan
+	// Only process events that matter to us
 	switch env.EventType {
 	case events.EventTransactionCompleted, events.EventTransactionRejected:
 		return h.handleTransactionEvent(ctx, env.EventID, env.EventType, env.Payload)
@@ -51,7 +51,7 @@ func (h *EventHandler) Handle(ctx context.Context, msg pkgkafka.Message) error {
 }
 
 func (h *EventHandler) handleTransactionEvent(ctx context.Context, eventID, eventType string, raw []byte) error {
-	// 1) Actualizar la materialized view + marcar idempotencia en una sola tx
+	// 1) Update the materialized view + mark idempotency in a single tx
 	tx, err := h.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -89,18 +89,18 @@ func (h *EventHandler) handleTransactionEvent(ctx context.Context, eventID, even
 	}
 	committed = true
 
-	// 2) Generar la explicación con el LLM (fuera de la tx para no
-	//    bloquear conexiones de DB mientras esperamos a Claude).
-	//    Si falla, lo logueamos pero no propagamos: la transacción
-	//    igual quedó en la vista, y la explicación se puede regenerar.
+	// 2) Generate the explanation with the LLM (outside the tx so we
+	//    don't block DB connections while waiting for Claude).
+	//    If it fails we log it but don't propagate: the transaction
+	//    is already in the view, and the explanation can be regenerated.
 	go h.generateExplanation(view)
 
 	return nil
 }
 
 func (h *EventHandler) generateExplanation(view domain.TransactionView) {
-	// Usamos un context independiente con timeout porque el caller ya
-	// terminó el handler de Kafka (commit del offset hecho).
+	// We use an independent context with timeout because the caller
+	// already finished the Kafka handler (offset commit done).
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -122,8 +122,8 @@ func (h *EventHandler) generateExplanation(view domain.TransactionView) {
 	h.logger.Info("explanation generated", "tx_id", view.ID, "model", h.svc.Explainer().Model())
 }
 
-// parseToView convierte el payload del evento a TransactionView.
-// Maneja los dos eventos relevantes: Completed y Rejected.
+// parseToView converts the event payload into a TransactionView.
+// Handles the two relevant events: Completed and Rejected.
 func (h *EventHandler) parseToView(eventType string, raw []byte) (domain.TransactionView, error) {
 	switch eventType {
 	case events.EventTransactionCompleted:

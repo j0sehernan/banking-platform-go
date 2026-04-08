@@ -8,26 +8,26 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Estados de la transacción. Usamos los del paquete events para mantener
-// consistencia entre la DB y los mensajes de Kafka.
+// Transaction states. We use the ones from the events package to keep
+// consistency between the DB and the Kafka messages.
 const (
 	StatusPending   = events.TxStatusPending
 	StatusCompleted = events.TxStatusCompleted
 	StatusRejected  = events.TxStatusRejected
 )
 
-// Tipos de transacción.
+// Transaction types.
 const (
 	TypeDeposit  = events.TxTypeDeposit
 	TypeWithdraw = events.TxTypeWithdraw
 	TypeTransfer = events.TxTypeTransfer
 )
 
-// Transaction es la entidad principal del servicio.
+// Transaction is the main entity of the service.
 //
-// IdempotencyKey es UNIQUE en DB → si el cliente reintenta el mismo POST,
-// el INSERT falla con violación de UNIQUE y devolvemos la transacción
-// existente (no creamos una duplicada).
+// IdempotencyKey is UNIQUE in the DB → if the client retries the same
+// POST, the INSERT fails with a UNIQUE violation and we return the
+// existing transaction (no duplicates created).
 type Transaction struct {
 	ID             uuid.UUID
 	Type           string
@@ -43,9 +43,9 @@ type Transaction struct {
 	UpdatedAt      time.Time
 }
 
-// NewTransaction construye una transacción nueva en estado PENDING.
-// La validación de campos requeridos por tipo (ej: TRANSFER necesita
-// from y to) la hace el caller en service/.
+// NewTransaction builds a new transaction in PENDING state.
+// The validation of required fields per type (e.g. TRANSFER needs
+// from and to) is done by the caller in service/.
 func NewTransaction(txType string, from, to *uuid.UUID, amount decimal.Decimal, currency, idempotencyKey string) Transaction {
 	now := time.Now().UTC()
 	return Transaction{
@@ -62,11 +62,11 @@ func NewTransaction(txType string, from, to *uuid.UUID, amount decimal.Decimal, 
 	}
 }
 
-// CanTransitionTo valida la máquina de estados.
-// PENDING → COMPLETED | REJECTED. Estado terminal: COMPLETED y REJECTED.
+// CanTransitionTo validates the state machine.
+// PENDING → COMPLETED | REJECTED. Terminal states: COMPLETED and REJECTED.
 func (t Transaction) CanTransitionTo(newStatus string) bool {
 	if t.Status != StatusPending {
-		return false // estado terminal
+		return false // terminal state
 	}
 	return newStatus == StatusCompleted || newStatus == StatusRejected
 }

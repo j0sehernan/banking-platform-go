@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// TransactionsViewRepo maneja la copia local de transacciones (read model).
+// TransactionsViewRepo manages the local copy of transactions (read model).
 type TransactionsViewRepo struct {
 	db DBTX
 }
@@ -18,8 +18,8 @@ func NewTransactionsViewRepo(db DBTX) *TransactionsViewRepo {
 	return &TransactionsViewRepo{db: db}
 }
 
-// Upsert inserta o actualiza una transacción en la vista.
-// Lo llama el consumer cada vez que llega un evento de transactions-ms.
+// Upsert inserts or updates a transaction in the view.
+// Called by the consumer every time an event arrives from transactions-ms.
 func (r *TransactionsViewRepo) Upsert(ctx context.Context, t domain.TransactionView) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO transactions_view
@@ -38,7 +38,7 @@ func (r *TransactionsViewRepo) Upsert(ctx context.Context, t domain.TransactionV
 	return err
 }
 
-// GetByID lee una transacción por id.
+// GetByID reads a transaction by id.
 func (r *TransactionsViewRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.TransactionView, error) {
 	var t domain.TransactionView
 	var rejCode, rejMsg *string

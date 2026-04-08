@@ -1,21 +1,21 @@
 //go:build e2e
 // +build e2e
 
-// Test end-to-end del flujo completo de transferencia.
+// End-to-end test for the full transfer flow.
 //
-// Asume que el sistema está corriendo (docker compose up).
-// Para correrlo:
+// Assumes the system is up (docker compose up).
+// To run it:
 //   docker compose up -d
 //   go test -tags=e2e ./test/e2e/...
 //
-// Cubre:
-//   1. Crear cliente
-//   2. Crear 2 cuentas
-//   3. Depositar saldo en una
-//   4. Transferir entre cuentas (happy path)
-//   5. Verificar saldos finales
-//   6. Verificar que el llm-ms generó la explicación
-//   7. Caso rechazado: transferencia con monto > saldo
+// Covers:
+//   1. Create a client
+//   2. Create 2 accounts
+//   3. Deposit balance into one
+//   4. Transfer between accounts (happy path)
+//   5. Verify final balances
+//   6. Verify llm-ms generated the explanation
+//   7. Rejected case: transfer with amount > balance
 package e2e
 
 import (
@@ -57,27 +57,27 @@ type explanationResp struct {
 }
 
 func TestE2E_TransferHappyPath(t *testing.T) {
-	// 1. Crear cliente
+	// 1. Create client
 	client := mustCreateClient(t, "Ana Perez", uniqueEmail("ana"))
 	t.Logf("created client: %s", client.ID)
 
-	// 2. Crear 2 cuentas
+	// 2. Create 2 accounts
 	accA := mustCreateAccount(t, client.ID, "USD")
 	accB := mustCreateAccount(t, client.ID, "USD")
 	t.Logf("created accounts: A=%s B=%s", accA.ID, accB.ID)
 
-	// 3. Depositar 1000 en A
+	// 3. Deposit 1000 into A
 	depTx := mustCreateDeposit(t, accA.ID, "1000.00", "USD")
 	waitForStatus(t, depTx.ID, "COMPLETED", 15*time.Second)
 
-	// 4. Transferir 300 de A a B
+	// 4. Transfer 300 from A to B
 	tx := mustCreateTransfer(t, accA.ID, accB.ID, "300.00", "USD")
 	final := waitForStatus(t, tx.ID, "COMPLETED", 15*time.Second)
 	if final.Status != "COMPLETED" {
 		t.Fatalf("expected COMPLETED, got %s", final.Status)
 	}
 
-	// 5. Verificar saldos
+	// 5. Verify balances
 	a := mustGetAccount(t, accA.ID)
 	b := mustGetAccount(t, accB.ID)
 	if a.Balance != "700.0000" {
@@ -87,7 +87,7 @@ func TestE2E_TransferHappyPath(t *testing.T) {
 		t.Errorf("expected B balance 300.0000, got %s", b.Balance)
 	}
 
-	// 6. Verificar que el llm-ms generó la explicación (con polling)
+	// 6. Verify llm-ms generated the explanation (with polling)
 	exp := waitForExplanation(t, tx.ID, 20*time.Second)
 	if exp.Explanation == "" {
 		t.Errorf("explanation is empty")
@@ -100,7 +100,7 @@ func TestE2E_TransferRejectedInsufficientFunds(t *testing.T) {
 	accA := mustCreateAccount(t, client.ID, "USD")
 	accB := mustCreateAccount(t, client.ID, "USD")
 
-	// transferir más de lo que hay (cuenta vacía)
+	// transfer more than available (empty account)
 	tx := mustCreateTransfer(t, accA.ID, accB.ID, "9999.00", "USD")
 	final := waitForStatus(t, tx.ID, "REJECTED", 15*time.Second)
 
@@ -111,7 +111,7 @@ func TestE2E_TransferRejectedInsufficientFunds(t *testing.T) {
 		t.Errorf("expected rejection_code=insufficient_funds, got %s", final.RejectionCode)
 	}
 
-	// la explicación también debe generarse para rechazos
+	// the explanation should be generated for rejections too
 	exp := waitForExplanation(t, tx.ID, 20*time.Second)
 	if exp.Explanation == "" {
 		t.Errorf("expected explanation for rejection")

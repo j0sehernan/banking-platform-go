@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Client es un cliente del banco. Mantengo solo los campos mínimos
-// que pide el enunciado. En la realidad acá habría DNI, dirección, etc.
+// Client represents a bank client. Only the minimal fields the challenge
+// asks for. In a real system there would also be ID document, address, etc.
 type Client struct {
 	ID        uuid.UUID
 	Name      string
@@ -15,9 +15,9 @@ type Client struct {
 	CreatedAt time.Time
 }
 
-// NewClient construye un Client con ID generado y timestamp actual.
-// La validación sintáctica de Name/Email vive en el handler HTTP (tags),
-// acá solo asignamos los valores.
+// NewClient builds a Client with a generated ID and current timestamp.
+// Syntactic validation of Name/Email lives in the HTTP handler (via tags),
+// here we just assign the values.
 func NewClient(name, email string) Client {
 	return Client{
 		ID:        uuid.New(),

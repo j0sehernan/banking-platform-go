@@ -1,7 +1,7 @@
--- Schema inicial: clientes y cuentas.
--- El CHECK (balance >= 0) es la última línea de defensa: aunque haya
--- un bug en el código, Postgres rechaza el UPDATE si el saldo quedaría
--- negativo. Imposible bypassearlo desde la app.
+-- Initial schema: clients and accounts.
+-- The CHECK (balance >= 0) is the last line of defense: even with a bug
+-- in the code, Postgres rejects the UPDATE if the balance would go
+-- negative. Cannot be bypassed from the app.
 
 CREATE TABLE clients (
     id          UUID PRIMARY KEY,

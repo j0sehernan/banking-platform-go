@@ -27,7 +27,7 @@ func (h *Handler) CreateDeposit(w http.ResponseWriter, r *http.Request) error {
 	}
 	amount, err := decimal.NewFromString(req.Amount)
 	if err != nil || !amount.IsPositive() {
-		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "El monto debe ser positivo")
+		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "Amount must be positive")
 	}
 	to, _ := uuid.Parse(req.ToAccountID)
 
@@ -53,7 +53,7 @@ func (h *Handler) CreateWithdraw(w http.ResponseWriter, r *http.Request) error {
 	}
 	amount, err := decimal.NewFromString(req.Amount)
 	if err != nil || !amount.IsPositive() {
-		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "El monto debe ser positivo")
+		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "Amount must be positive")
 	}
 	from, _ := uuid.Parse(req.FromAccountID)
 
@@ -79,7 +79,7 @@ func (h *Handler) CreateTransfer(w http.ResponseWriter, r *http.Request) error {
 	}
 	amount, err := decimal.NewFromString(req.Amount)
 	if err != nil || !amount.IsPositive() {
-		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "El monto debe ser positivo")
+		return httpx.NewError(http.StatusUnprocessableEntity, "invalid_amount", "Amount must be positive")
 	}
 	from, _ := uuid.Parse(req.FromAccountID)
 	to, _ := uuid.Parse(req.ToAccountID)
@@ -103,7 +103,7 @@ func (h *Handler) CreateTransfer(w http.ResponseWriter, r *http.Request) error {
 func (h *Handler) GetTransaction(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 	tx, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
@@ -131,7 +131,7 @@ func (h *Handler) ListTransactions(w http.ResponseWriter, r *http.Request) error
 func (h *Handler) ListByAccount(w http.ResponseWriter, r *http.Request) error {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		return httpx.NewError(http.StatusBadRequest, "invalid_id", "El id no es un UUID válido")
+		return httpx.NewError(http.StatusBadRequest, "invalid_id", "The id is not a valid UUID")
 	}
 	txs, err := h.svc.ListByAccount(r.Context(), id)
 	if err != nil {

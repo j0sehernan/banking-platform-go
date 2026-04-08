@@ -1,6 +1,6 @@
-// Package explainer abstrae el LLM detrás de una interface.
-// Tenemos dos implementaciones: ClaudeExplainer (real) y MockExplainer
-// (templates deterministas para tests/local sin API key).
+// Package explainer abstracts the LLM behind an interface.
+// We have two implementations: ClaudeExplainer (real) and MockExplainer
+// (deterministic templates for tests/local without an API key).
 package explainer
 
 import (
@@ -10,40 +10,40 @@ import (
 	"github.com/j0sehernan/banking-platform-go/services/llm-ms/internal/domain"
 )
 
-// Explainer es la abstracción del LLM.
+// Explainer is the LLM abstraction.
 //
-// Tener una interface en vez de usar Claude directamente nos permite:
-//  1. Tests sin tocar la API real
-//  2. Fallback automático a mock si no hay ANTHROPIC_API_KEY
-//  3. Cambiar de proveedor (OpenAI, Gemini, etc.) sin tocar el código de negocio
+// Having an interface instead of using Claude directly allows us to:
+//  1. Run tests without hitting the real API
+//  2. Automatically fall back to a mock when ANTHROPIC_API_KEY is not set
+//  3. Swap providers (OpenAI, Gemini, etc.) without touching business code
 type Explainer interface {
-	// ExplainTransaction genera una explicación corta y autocontenida
-	// de una transacción. La llama el consumer al recibir el evento final.
+	// ExplainTransaction generates a short, self-contained explanation
+	// of a transaction. Called by the consumer when receiving the final event.
 	ExplainTransaction(ctx context.Context, tx *domain.TransactionView) (string, error)
 
-	// ChatStream abre un stream de respuesta para el chat scoped a una
-	// transacción. El usuario manda mensajes y Claude responde acotado
-	// a esa transacción específica.
+	// ChatStream opens a streaming response for the chat scoped to a
+	// transaction. The user sends messages and Claude replies bound to
+	// that specific transaction.
 	ChatStream(ctx context.Context, tx *domain.TransactionView, messages []domain.ChatMessage) (Stream, error)
 
-	// Model devuelve el nombre del modelo (para guardar en la DB).
+	// Model returns the model name (used to persist with the explanation).
 	Model() string
 }
 
-// Stream representa un stream incremental de chunks de texto del LLM.
-// Cada implementación lo envuelve sobre su propio mecanismo (SSE para Claude,
-// canal con texto para mock).
+// Stream represents an incremental stream of text chunks from the LLM.
+// Each implementation wraps it on its own mechanism (SSE for Claude,
+// channel-based for mock).
 type Stream interface {
-	// Next devuelve el próximo chunk de texto. Bloquea hasta que haya uno
-	// o el stream termine. Devuelve "", io.EOF cuando termina.
+	// Next returns the next text chunk. Blocks until one is available
+	// or the stream ends. Returns "", io.EOF when finished.
 	Next(ctx context.Context) (string, error)
 
-	// Close libera recursos del stream.
+	// Close releases stream resources.
 	Close() error
 }
 
-// txContextJSON serializa una TransactionView a JSON autodescriptivo
-// para inyectar en el system prompt.
+// txContextJSON serializes a TransactionView into self-describing JSON
+// to inject into the system prompt.
 func txContextJSON(tx *domain.TransactionView) string {
 	type fromTo struct {
 		ID string `json:"id,omitempty"`
@@ -80,14 +80,14 @@ func txContextJSON(tx *domain.TransactionView) string {
 	return string(bytes)
 }
 
-const baseSystemPrompt = `Eres un asistente bancario especializado. Tu única función es responder preguntas sobre la siguiente transacción específica:
+const baseSystemPrompt = `You are a specialized banking assistant. Your only job is to answer questions about the following specific transaction:
 
 %s
 
-Reglas estrictas que debes seguir SIEMPRE:
-1. Responde únicamente sobre esta transacción. No discutas otras cuentas, otras transacciones ni temas no relacionados.
-2. Si el usuario pregunta algo fuera de scope (otra transacción, finanzas en general, temas no bancarios), declina amablemente y redirígelo a esta transacción.
-3. No inventes datos que no estén en el JSON. Si no sabes algo concreto, dilo.
-4. Responde en español, de forma clara, breve y profesional.
-5. Si la transacción está rechazada (REJECTED), explica la razón con empatía.
-6. No incluyas IDs de UUIDs en tus respuestas a menos que el usuario los pida explícitamente.`
+Strict rules you must always follow:
+1. Answer only about this transaction. Do not discuss other accounts, other transactions, or unrelated topics.
+2. If the user asks something out of scope (other transactions, general finance, non-banking topics), decline politely and steer them back to this transaction.
+3. Do not make up data that is not in the JSON. If you do not know something concrete, say so.
+4. Reply in clear, brief, professional English.
+5. If the transaction is REJECTED, explain the reason with empathy.
+6. Do not include UUID identifiers in your replies unless the user explicitly asks for them.`

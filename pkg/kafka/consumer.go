@@ -10,13 +10,14 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
-// HandlerFunc procesa un mensaje. Si devuelve error, el wrapper hará retry.
-// Si tras N intentos sigue fallando, el mensaje va a la DLQ y se commitea
-// el offset (para no bloquear la partición eternamente).
+// HandlerFunc processes one message. If it returns an error, the wrapper
+// will retry. If after N attempts it keeps failing, the message is sent
+// to the DLQ and the offset is committed (so the partition is not blocked
+// forever).
 type HandlerFunc func(ctx context.Context, msg Message) error
 
-// Message es la versión "limpia" del kafka.Message: solo lo que el handler
-// necesita. Evita acoplar al handler con la API de kafka-go.
+// Message is the "clean" version of kafka.Message: only what the handler
+// needs. Avoids coupling handlers to the kafka-go API.
 type Message struct {
 	Topic     string
 	Partition int
@@ -27,26 +28,26 @@ type Message struct {
 	Time      time.Time
 }
 
-// ConsumerConfig agrupa lo configurable del consumer.
+// ConsumerConfig groups everything configurable on the consumer.
 type ConsumerConfig struct {
 	Brokers     []string
 	GroupID     string
 	Topic       string
-	MaxRetries  int           // cuántas veces reintentar antes de DLQ (default 3)
-	BackoffBase time.Duration // backoff inicial (default 1s, exponencial)
+	MaxRetries  int           // attempts before going to the DLQ (default 3)
+	BackoffBase time.Duration // initial backoff (default 1s, exponential)
 }
 
-// Consumer es un wrapper sobre kafka.Reader con retries + DLQ + idempotencia delegada.
+// Consumer wraps kafka.Reader with retries + DLQ + delegated idempotency.
 type Consumer struct {
-	reader  *kafka.Reader
-	dlq     *Producer
-	cfg     ConsumerConfig
-	logger  *slog.Logger
+	reader *kafka.Reader
+	dlq    *Producer
+	cfg    ConsumerConfig
+	logger *slog.Logger
 }
 
-// NewConsumer crea un consumer para un topic con un consumer group.
-// El dlq es opcional pero recomendado: si está nil, los mensajes que fallan
-// definitivamente solo se loguean (no es lo ideal en prod).
+// NewConsumer creates a consumer for a topic with a consumer group.
+// dlq is optional but recommended: if nil, messages that fail terminally
+// are only logged (not ideal in production).
 func NewConsumer(cfg ConsumerConfig, dlq *Producer, logger *slog.Logger) *Consumer {
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = 3
@@ -61,7 +62,7 @@ func NewConsumer(cfg ConsumerConfig, dlq *Producer, logger *slog.Logger) *Consum
 		Topic:          cfg.Topic,
 		MinBytes:       1,
 		MaxBytes:       10 << 20, // 10MB
-		CommitInterval: 0,        // commit manual tras procesar
+		CommitInterval: 0,        // manual commit after processing
 		StartOffset:    kafka.LastOffset,
 	})
 
@@ -73,9 +74,9 @@ func NewConsumer(cfg ConsumerConfig, dlq *Producer, logger *slog.Logger) *Consum
 	}
 }
 
-// Run consume mensajes hasta que el contexto se cancele.
-// El loop es: leer → procesar (con retries) → commit. Si tras retries falla,
-// publica a la DLQ y commitea para avanzar.
+// Run consumes messages until the context is cancelled.
+// Loop: read → process (with retries) → commit. If after retries it still
+// fails, publish to the DLQ and commit to advance.
 func (c *Consumer) Run(ctx context.Context, handle HandlerFunc) error {
 	c.logger.Info("kafka consumer started",
 		"group", c.cfg.GroupID,
@@ -87,7 +88,7 @@ func (c *Consumer) Run(ctx context.Context, handle HandlerFunc) error {
 	)
 
 	for {
-		// FetchMessage es blocking pero respeta el contexto
+		// FetchMessage is blocking but respects the context
 		raw, err := c.reader.FetchMessage(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -97,7 +98,7 @@ func (c *Consumer) Run(ctx context.Context, handle HandlerFunc) error {
 				"err", err,
 				"topic", c.cfg.Topic,
 			)
-			// pequeño backoff antes de reintentar la lectura
+			// small backoff before retrying the read
 			select {
 			case <-ctx.Done():
 				return nil
@@ -108,25 +109,26 @@ func (c *Consumer) Run(ctx context.Context, handle HandlerFunc) error {
 
 		msg := toMessage(raw)
 		if err := c.processWithRetry(ctx, msg, handle); err != nil {
-			// si processWithRetry devuelve error, el contexto fue cancelado
+			// if processWithRetry returns an error, the context was cancelled
 			return nil
 		}
 
-		// commit del offset (avanzamos en la partición)
+		// commit the offset (advance in the partition)
 		if err := c.reader.CommitMessages(ctx, raw); err != nil {
 			c.logger.Error("kafka commit error", "err", err)
 		}
 	}
 }
 
-// processWithRetry intenta hasta MaxRetries veces con backoff exponencial.
-// Si todos los intentos fallan, manda a DLQ y devuelve nil (para que el caller
-// commitee el offset y siga). Solo devuelve error si el contexto se canceló.
+// processWithRetry attempts up to MaxRetries times with exponential backoff.
+// If all attempts fail, sends to the DLQ and returns nil (so the caller
+// can commit the offset and continue). Only returns an error when the
+// context is cancelled.
 func (c *Consumer) processWithRetry(ctx context.Context, msg Message, handle HandlerFunc) error {
 	var lastErr error
 	for attempt := 0; attempt <= c.cfg.MaxRetries; attempt++ {
 		if attempt > 0 {
-			// backoff exponencial: 1s, 2s, 4s, 8s...
+			// exponential backoff: 1s, 2s, 4s, 8s...
 			backoff := c.cfg.BackoffBase * (1 << (attempt - 1))
 			c.logger.Warn("kafka handler failed, retrying",
 				"attempt", attempt,
@@ -145,11 +147,11 @@ func (c *Consumer) processWithRetry(ctx context.Context, msg Message, handle Han
 			lastErr = err
 			continue
 		}
-		// éxito
+		// success
 		return nil
 	}
 
-	// Tras todos los retries, DLQ
+	// After all retries, send to DLQ
 	c.sendToDLQ(ctx, msg, lastErr)
 	return nil
 }
@@ -187,7 +189,7 @@ func (c *Consumer) sendToDLQ(ctx context.Context, msg Message, lastErr error) {
 	)
 }
 
-// Close libera recursos del reader.
+// Close releases reader resources.
 func (c *Consumer) Close() error {
 	return c.reader.Close()
 }

@@ -1,6 +1,6 @@
-// Package repo implementa el acceso a Postgres con pgx (sin ORM).
-// Las queries son simples y SQL crudo, lo cual es idiomático en Go.
-// Todas usan placeholders ($1, $2...) para evitar SQL injection.
+// Package repo implements Postgres access using pgx (no ORM).
+// Queries are simple, raw SQL — idiomatic for Go senior projects.
+// All queries use placeholders ($1, $2…) to avoid SQL injection.
 package repo
 
 import (
@@ -12,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// pgUniqueViolation es el SQLSTATE que Postgres devuelve cuando se viola
-// un UNIQUE constraint. Lo usamos para detectar email duplicado.
+// pgUniqueViolation is the SQLSTATE Postgres returns when a UNIQUE
+// constraint is violated. We use it to detect duplicate emails.
 const pgUniqueViolation = "23505"
 
 type ClientRepo struct {
@@ -24,7 +24,8 @@ func NewClientRepo(db DBTX) *ClientRepo {
 	return &ClientRepo{db: db}
 }
 
-// Create inserta un cliente. Si el email ya existe, devuelve ErrEmailAlreadyExists.
+// Create inserts a client. If the email already exists, returns
+// ErrEmailAlreadyExists.
 func (r *ClientRepo) Create(ctx context.Context, c domain.Client) error {
 	_, err := r.db.Exec(ctx,
 		`INSERT INTO clients (id, name, email, created_at) VALUES ($1, $2, $3, $4)`,
@@ -40,7 +41,7 @@ func (r *ClientRepo) Create(ctx context.Context, c domain.Client) error {
 	return nil
 }
 
-// GetByID busca un cliente. Devuelve ErrClientNotFound si no existe.
+// GetByID looks up a client. Returns ErrClientNotFound if missing.
 func (r *ClientRepo) GetByID(ctx context.Context, id string) (*domain.Client, error) {
 	var c domain.Client
 	err := r.db.QueryRow(ctx,

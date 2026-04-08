@@ -1,6 +1,6 @@
-// Package http contiene los handlers HTTP de accounts-ms.
-// Las request structs llevan tags de validación que el helper
-// httpx.DecodeAndValidate procesa automáticamente.
+// Package http contains the HTTP handlers of accounts-ms.
+// The request structs carry validation tags that the
+// httpx.DecodeAndValidate helper processes automatically.
 package http
 
 import "time"

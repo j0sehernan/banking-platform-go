@@ -1,7 +1,7 @@
-// transactions-ms expone los endpoints HTTP de transacciones,
-// publica TransactionRequested al bus, consume accounts.tx-results
-// para cerrar el ciclo del saga, y emite los eventos finales
-// (Completed/Rejected) que llm-ms va a procesar.
+// transactions-ms exposes the HTTP endpoints for transactions, publishes
+// TransactionRequested to the bus, consumes accounts.tx-results to close
+// the saga loop, and emits the final events (Completed/Rejected) that
+// llm-ms will process.
 package main
 
 import (
@@ -146,9 +146,9 @@ func waitForDB(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) err
 
 func registerDomainErrors() {
 	httpx.RegisterDomainError(domain.ErrTransactionNotFound,
-		httpx.NewError(nethttp.StatusNotFound, "transaction_not_found", "La transacción no existe"))
+		httpx.NewError(nethttp.StatusNotFound, "transaction_not_found", "The transaction does not exist"))
 	httpx.RegisterDomainError(domain.ErrInvalidTransactionType,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "invalid_type", "Tipo de transacción inválido"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "invalid_type", "Invalid transaction type"))
 	httpx.RegisterDomainError(domain.ErrSameAccountTransfer,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "same_account", "No se puede transferir a la misma cuenta"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "same_account", "Cannot transfer to the same account"))
 }

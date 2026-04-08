@@ -31,10 +31,10 @@ func TestAccount_CanDebit(t *testing.T) {
 		amount  string
 		want    bool
 	}{
-		{"saldo suficiente", "100.00", "50.00", true},
-		{"saldo justo", "100.00", "100.00", true},
-		{"saldo insuficiente", "50.00", "100.00", false},
-		{"saldo cero", "0.00", "0.01", false},
+		{"sufficient balance", "100.00", "50.00", true},
+		{"exact balance", "100.00", "100.00", true},
+		{"insufficient balance", "50.00", "100.00", false},
+		{"zero balance", "0.00", "0.01", false},
 	}
 
 	for _, tt := range tests {

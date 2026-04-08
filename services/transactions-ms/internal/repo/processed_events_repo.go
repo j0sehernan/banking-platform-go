@@ -15,7 +15,7 @@ func NewProcessedEventsRepo(db DBTX) *ProcessedEventsRepo {
 	return &ProcessedEventsRepo{db: db}
 }
 
-// MarkProcessed devuelve true si el evento es nuevo, false si ya estaba.
+// MarkProcessed returns true if the event is new, false if already there.
 func (r *ProcessedEventsRepo) MarkProcessed(ctx context.Context, eventID string) (bool, error) {
 	var inserted string
 	err := r.db.QueryRow(ctx,

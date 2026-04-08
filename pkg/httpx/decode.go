@@ -11,11 +11,11 @@ import (
 
 var validate = validator.New(validator.WithRequiredStructEnabled())
 
-// DecodeAndValidate parsea el body JSON al tipo destino y corre la
-// validación con go-playground/validator. Devuelve un *Error con
-// status apropiado si algo falla.
+// DecodeAndValidate parses the JSON body into the destination type and
+// runs validation with go-playground/validator. Returns a *Error with
+// an appropriate status if anything fails.
 //
-// Uso típico en un handler:
+// Typical usage in a handler:
 //
 //	var req CreateAccountRequest
 //	if err := httpx.DecodeAndValidate(r, &req); err != nil {
@@ -24,7 +24,7 @@ var validate = validator.New(validator.WithRequiredStructEnabled())
 func DecodeAndValidate[T any](r *http.Request, dst *T) error {
 	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		return NewError(http.StatusBadRequest, "invalid_json",
-			"El cuerpo del request no es JSON válido")
+			"Request body is not valid JSON")
 	}
 
 	if err := validate.Struct(dst); err != nil {
@@ -33,7 +33,7 @@ func DecodeAndValidate[T any](r *http.Request, dst *T) error {
 	return nil
 }
 
-// Validate corre solo la validación (cuando el decode lo hizo otro).
+// Validate runs only the validation (when decode was done elsewhere).
 func Validate(v any) error {
 	if err := validate.Struct(v); err != nil {
 		return validationError(err)
@@ -59,7 +59,7 @@ func validationError(err error) error {
 	return &Error{
 		Status:  http.StatusUnprocessableEntity,
 		Code:    "validation_failed",
-		Message: "El request tiene campos inválidos",
+		Message: "The request has invalid fields",
 		Details: map[string]any{"fields": fields},
 	}
 }
@@ -67,31 +67,31 @@ func validationError(err error) error {
 func humanize(fe validator.FieldError) string {
 	switch fe.Tag() {
 	case "required":
-		return "es requerido"
+		return "is required"
 	case "uuid":
-		return "debe ser un UUID válido"
+		return "must be a valid UUID"
 	case "email":
-		return "debe ser un email válido"
+		return "must be a valid email"
 	case "gt":
-		return "debe ser mayor que " + fe.Param()
+		return "must be greater than " + fe.Param()
 	case "gte":
-		return "debe ser mayor o igual a " + fe.Param()
+		return "must be greater than or equal to " + fe.Param()
 	case "min":
-		return "longitud mínima: " + fe.Param()
+		return "minimum length: " + fe.Param()
 	case "max":
-		return "longitud máxima: " + fe.Param()
+		return "maximum length: " + fe.Param()
 	case "oneof":
-		return "debe ser uno de: " + fe.Param()
+		return "must be one of: " + fe.Param()
 	case "nefield":
-		return "debe ser distinto a " + fe.Param()
+		return "must be different from " + fe.Param()
 	case "numeric":
-		return "debe ser numérico"
+		return "must be numeric"
 	default:
-		return "valor inválido"
+		return "invalid value"
 	}
 }
 
-// toSnake convierte CamelCase a snake_case (FieldName -> field_name).
+// toSnake converts CamelCase to snake_case (FieldName -> field_name).
 func toSnake(s string) string {
 	var b strings.Builder
 	for i, r := range s {

@@ -1,5 +1,5 @@
-// Package events define el envelope estándar que viaja en Kafka y los tipos
-// de eventos que cada microservicio puede publicar o consumir.
+// Package events defines the standard envelope that travels through Kafka
+// and the event types each microservice can publish or consume.
 package events
 
 import (
@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Envelope es el formato común de todos los mensajes que viajan por Kafka.
-// Tener un envelope estándar simplifica idempotencia, tracing y deserialización.
+// Envelope is the common format for all messages sent through Kafka.
+// Having a standard envelope simplifies idempotency, tracing, and decoding.
 type Envelope struct {
 	EventID       string          `json:"event_id"`
 	EventType     string          `json:"event_type"`
@@ -20,8 +20,8 @@ type Envelope struct {
 	Payload       json.RawMessage `json:"payload"`
 }
 
-// NewEnvelope crea un envelope con un event_id nuevo y timestamp actual.
-// El payload se serializa acá para evitar errores en el call site.
+// NewEnvelope builds an envelope with a fresh event_id and current timestamp.
+// Payload is serialized here to avoid errors at the call site.
 func NewEnvelope(eventType string, payload any, correlationID string) (Envelope, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -37,17 +37,17 @@ func NewEnvelope(eventType string, payload any, correlationID string) (Envelope,
 	}, nil
 }
 
-// Decode deserializa el payload del envelope al tipo destino.
+// Decode unmarshals the envelope payload into the destination type.
 func (e Envelope) Decode(dst any) error {
 	return json.Unmarshal(e.Payload, dst)
 }
 
-// MarshalBinary serializa el envelope para enviarlo a Kafka.
+// MarshalBinary serializes the envelope for sending to Kafka.
 func (e Envelope) MarshalBinary() ([]byte, error) {
 	return json.Marshal(e)
 }
 
-// UnmarshalEnvelope parsea un envelope desde bytes (lo usa el consumer).
+// UnmarshalEnvelope parses an envelope from raw bytes (used by the consumer).
 func UnmarshalEnvelope(data []byte) (Envelope, error) {
 	var e Envelope
 	if err := json.Unmarshal(data, &e); err != nil {

@@ -27,11 +27,11 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
     setInput('');
     setStreaming(true);
 
-    // Append assistant message vacío que se va llenando con cada chunk
+    // Append empty assistant message that gets filled with each chunk
     const assistantIdx = next.length;
     setMessages([...next, { role: 'assistant', content: '' }]);
 
-    // Registrar en activity store
+    // Record in the activity store
     const store = useActivityStore.getState();
     const entryId = store.addEntry({
       method: 'POST',
@@ -61,7 +61,7 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        // Parsear eventos SSE separados por línea en blanco
+        // Parse SSE events separated by blank lines
         const events = buffer.split('\n\n');
         buffer = events.pop() || '';
 
@@ -90,7 +90,7 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
             continue;
           }
 
-          // chunk normal: { "text": "..." }
+          // normal chunk: { "text": "..." }
           try {
             const parsed = JSON.parse(data);
             const chunk = parsed.text || '';
@@ -124,7 +124,7 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl mx-0 sm:mx-4 shadow-xl flex flex-col h-[80vh] sm:h-[600px]">
         <header className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
           <div>
-            <div className="font-semibold text-sm">💬 Chat sobre esta transacción</div>
+            <div className="font-semibold text-sm">💬 Chat about this transaction</div>
             <div className="text-[10px] text-slate-500 mt-0.5 font-mono">{txId.slice(0, 13)}...</div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-xl">
@@ -135,9 +135,9 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="text-center text-slate-500 text-sm py-8">
-              Hacé una pregunta sobre esta transacción.
+              Ask a question about this transaction.
               <br />
-              <span className="text-xs">El LLM solo puede hablar sobre esta transacción específica.</span>
+              <span className="text-xs">The LLM can only talk about this specific transaction.</span>
             </div>
           )}
           {messages.map((m, i) => (
@@ -170,7 +170,7 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribí tu pregunta..."
+              placeholder="Type your question..."
               disabled={streaming}
               className="flex-1 border border-slate-300 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
             />
@@ -179,7 +179,7 @@ export function TransactionChat({ txId, onClose }: { txId: string; onClose: () =
               disabled={streaming || !input.trim()}
               className="bg-slate-800 text-white rounded-full px-5 text-sm font-medium hover:bg-slate-900 disabled:opacity-50"
             >
-              {streaming ? '...' : 'Enviar'}
+              {streaming ? '...' : 'Send'}
             </button>
           </form>
         </div>

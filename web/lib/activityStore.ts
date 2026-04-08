@@ -1,7 +1,7 @@
-// Store global de actividad técnica para el panel lateral.
-// Captura cada HTTP request y respuesta del front, y los chunks SSE
-// del chat con el LLM. Convierte la app en una herramienta de demo
-// técnica además de UI funcional.
+// Global store of technical activity for the side panel.
+// Captures every HTTP request and response from the front, and the SSE
+// chunks from the LLM chat. Turns the app into a technical demo tool
+// alongside its functional UI.
 import { create } from 'zustand';
 
 export type ActivityEntry = {
@@ -14,7 +14,7 @@ export type ActivityEntry = {
   requestBody?: unknown;
   responseBody?: unknown;
   errorMessage?: string;
-  // SSE chunks (para el chat)
+  // SSE chunks (for the chat)
   sseChunks?: string[];
 };
 

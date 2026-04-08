@@ -26,7 +26,7 @@ func TestEnvelopeRoundTrip(t *testing.T) {
 		t.Errorf("expected event_type %q, got %q", EventTransactionRequested, env.EventType)
 	}
 
-	// serializa y deserializa
+	// serialize and deserialize
 	bytes, err := env.MarshalBinary()
 	if err != nil {
 		t.Fatalf("MarshalBinary failed: %v", err)

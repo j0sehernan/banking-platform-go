@@ -1,8 +1,8 @@
-// accounts-ms expone el HTTP API de clientes y cuentas, consume
-// transactions.commands desde Kafka para ejecutar débitos/créditos,
-// y publica eventos vía outbox.
+// accounts-ms exposes the HTTP API for clients and accounts, consumes
+// transactions.commands from Kafka to execute debits/credits, and
+// publishes events via outbox.
 //
-// El main es el "composition root": el único lugar donde se arma todo.
+// main is the "composition root": the only place where everything is wired.
 package main
 
 import (
@@ -48,7 +48,7 @@ func run(logger *slog.Logger) error {
 		"kafka_brokers", cfg.KafkaBrokers,
 	)
 
-	// shutdown coordinado vía context
+	// shutdown coordinated via context
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -63,7 +63,7 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 
-	// === Servicios ===
+	// === Services ===
 	accountSvc := service.NewAccountService(pool)
 	txHandler := service.NewTransactionHandler(pool, logger)
 
@@ -139,8 +139,8 @@ func run(logger *slog.Logger) error {
 	return nil
 }
 
-// waitForDB hace ping a la DB con retries hasta que responde o el ctx termina.
-// Útil cuando el contenedor del ms arranca antes que Postgres esté 100% listo.
+// waitForDB pings the DB with retries until it answers or the ctx ends.
+// Useful when the service container starts before Postgres is fully ready.
 func waitForDB(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) error {
 	const maxAttempts = 30
 	for i := 0; i < maxAttempts; i++ {
@@ -157,22 +157,22 @@ func waitForDB(ctx context.Context, pool *pgxpool.Pool, logger *slog.Logger) err
 	return errors.New("database not reachable after 30s")
 }
 
-// registerDomainErrors mapea los errores tipados del dominio a HTTP status codes.
-// Esto permite que los handlers solo hagan `return err` y el wrapper se
-// encargue del status correcto sin código repetido.
+// registerDomainErrors maps the typed domain errors to HTTP status codes.
+// This way handlers just `return err` and the wrapper takes care of the
+// correct status without repeated code.
 func registerDomainErrors() {
 	httpx.RegisterDomainError(domain.ErrClientNotFound,
-		httpx.NewError(nethttp.StatusNotFound, "client_not_found", "El cliente no existe"))
+		httpx.NewError(nethttp.StatusNotFound, "client_not_found", "The client does not exist"))
 	httpx.RegisterDomainError(domain.ErrAccountNotFound,
-		httpx.NewError(nethttp.StatusNotFound, "account_not_found", "La cuenta no existe"))
+		httpx.NewError(nethttp.StatusNotFound, "account_not_found", "The account does not exist"))
 	httpx.RegisterDomainError(domain.ErrInsufficientFunds,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "insufficient_funds", "Saldo insuficiente"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "insufficient_funds", "Insufficient balance"))
 	httpx.RegisterDomainError(domain.ErrInvalidCurrency,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "invalid_currency", "Moneda no soportada"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "invalid_currency", "Currency not supported"))
 	httpx.RegisterDomainError(domain.ErrCurrencyMismatch,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "currency_mismatch", "Las cuentas tienen monedas distintas"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "currency_mismatch", "The accounts have different currencies"))
 	httpx.RegisterDomainError(domain.ErrSameAccountTransfer,
-		httpx.NewError(nethttp.StatusUnprocessableEntity, "same_account", "No se puede transferir a la misma cuenta"))
+		httpx.NewError(nethttp.StatusUnprocessableEntity, "same_account", "Cannot transfer to the same account"))
 	httpx.RegisterDomainError(domain.ErrEmailAlreadyExists,
-		httpx.NewError(nethttp.StatusConflict, "email_exists", "El email ya está registrado"))
+		httpx.NewError(nethttp.StatusConflict, "email_exists", "The email is already registered"))
 }

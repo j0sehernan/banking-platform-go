@@ -1,9 +1,9 @@
--- Inbox pattern (idempotencia de consumers): guarda IDs de eventos
--- ya procesados. Antes de manejar un evento, hacemos INSERT con
--- ON CONFLICT DO NOTHING. Si no devuelve fila → ya lo procesamos, skip.
+-- Inbox pattern (consumer idempotency): keeps the IDs of already
+-- processed events. Before handling an event we INSERT with
+-- ON CONFLICT DO NOTHING. If no row is returned → already processed, skip.
 --
--- Sin esta tabla, un re-delivery de Kafka (que ocurre normalmente)
--- causaría doble débito en una cuenta. Catastrófico en banca.
+-- Without this table, a Kafka redelivery (which happens normally)
+-- would cause double debit on an account. Catastrophic in banking.
 
 CREATE TABLE processed_events (
     event_id      UUID PRIMARY KEY,

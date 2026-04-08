@@ -17,11 +17,11 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// TransactionHandler procesa los TransactionRequested que llegan desde
-// transactions-ms y ejecuta el débito/crédito de cuentas.
+// TransactionHandler processes the TransactionRequested events that come
+// from transactions-ms and executes the actual debit/credit on accounts.
 //
-// Es el corazón del flujo event-driven: recibe el comando, ejecuta
-// atómicamente en su propia DB, y emite el resultado de vuelta.
+// It is the heart of the event-driven flow: receives the command,
+// executes atomically on its own DB, and emits the result back.
 type TransactionHandler struct {
 	pool   *pgxpool.Pool
 	logger *slog.Logger
@@ -31,7 +31,7 @@ func NewTransactionHandler(pool *pgxpool.Pool, logger *slog.Logger) *Transaction
 	return &TransactionHandler{pool: pool, logger: logger}
 }
 
-// Handle es la firma que el consumer Kafka espera.
+// Handle is the signature the Kafka consumer expects.
 func (h *TransactionHandler) Handle(ctx context.Context, msg pkgkafka.Message) error {
 	env, err := events.UnmarshalEnvelope(msg.Value)
 	if err != nil {
@@ -39,7 +39,7 @@ func (h *TransactionHandler) Handle(ctx context.Context, msg pkgkafka.Message) e
 	}
 
 	if env.EventType != events.EventTransactionRequested {
-		// no es nuestro evento, ignoramos
+		// not our event, ignore
 		return nil
 	}
 
@@ -48,7 +48,7 @@ func (h *TransactionHandler) Handle(ctx context.Context, msg pkgkafka.Message) e
 		return fmt.Errorf("decode payload: %w", err)
 	}
 
-	// idempotencia + ejecución en una sola tx
+	// idempotency + execution in a single tx
 	return h.processInTx(ctx, env.EventID, payload)
 }
 
@@ -57,9 +57,9 @@ func (h *TransactionHandler) processInTx(ctx context.Context, eventID string, p 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck // si commit ok, este rollback es no-op
+	defer tx.Rollback(ctx) //nolint:errcheck // if commit ok, this rollback is a no-op
 
-	// 1) check idempotencia
+	// 1) idempotency check
 	processedRepo := repo.NewProcessedEventsRepo(tx)
 	isNew, err := processedRepo.MarkProcessed(ctx, eventID)
 	if err != nil {
@@ -73,7 +73,7 @@ func (h *TransactionHandler) processInTx(ctx context.Context, eventID string, p 
 		return tx.Commit(ctx)
 	}
 
-	// 2) ejecutar la operación según el tipo
+	// 2) execute the operation depending on the type
 	accountRepo := repo.NewAccountRepo(tx)
 	outboxRepo := repo.NewOutboxRepo(tx)
 
@@ -94,15 +94,16 @@ func (h *TransactionHandler) processInTx(ctx context.Context, eventID string, p 
 	case events.TxTypeTransfer:
 		execErr = h.handleTransfer(ctx, accountRepo, outboxRepo, p, amount)
 	default:
-		execErr = fmt.Errorf("tipo desconocido: %s", p.Type)
+		execErr = fmt.Errorf("unknown type: %s", p.Type)
 	}
 
 	if execErr != nil {
-		// Importante: para fallos de negocio, NO devolvemos el error.
-		// En su lugar, hacemos rollback de los UPDATEs a accounts y abrimos
-		// una NUEVA transacción que solo guarda el evento de fallo.
-		// Si retornáramos el error, el consumer reintentaría el mensaje
-		// y con la idempotencia ya marcada nunca se publicaría el rejected.
+		// Important: for business failures we do NOT return the error.
+		// Instead we rollback the UPDATEs to accounts and open a NEW
+		// transaction that only stores the failure event.
+		// If we returned the error the consumer would retry the message,
+		// and with the idempotency already marked the rejected event
+		// would never be published.
 		_ = tx.Rollback(ctx)
 		return h.publishFailedInNewTx(ctx, eventID, p, execErr)
 	}
@@ -171,7 +172,8 @@ func (h *TransactionHandler) handleTransfer(
 		return domain.ErrSameAccountTransfer
 	}
 
-	// validar que ambas cuentas existen y misma moneda antes de mover plata
+	// validate that both accounts exist and have the same currency
+	// before moving any money
 	from, err := accountRepo.GetByID(ctx, fromID)
 	if err != nil {
 		return err
@@ -184,12 +186,12 @@ func (h *TransactionHandler) handleTransfer(
 		return domain.ErrCurrencyMismatch
 	}
 
-	// débito atómico (rechaza si no hay saldo)
+	// atomic debit (rejects if not enough balance)
 	oldFrom, newFrom, err := accountRepo.Debit(ctx, fromID, amount)
 	if err != nil {
 		return err
 	}
-	// crédito (en la misma tx → si falla, rollback automático)
+	// credit (in the same tx → if it fails, automatic rollback)
 	oldTo, newTo, err := accountRepo.Credit(ctx, toID, amount)
 	if err != nil {
 		return err
@@ -265,10 +267,9 @@ func (h *TransactionHandler) publishFailed(
 	return outboxRepo.Insert(ctx, events.TopicAccountsTxResults, p.TransactionID, bytes, nil)
 }
 
-// publishFailedInNewTx abre una nueva transacción para guardar el evento
-// de fallo + marcar como procesado. Esto se usa cuando el handler de
-// negocio falló (saldo insuficiente, cuenta no existe) y el rollback ya
-// pasó.
+// publishFailedInNewTx opens a new transaction to store the failure event
+// and mark idempotency. Used when the business handler failed (insufficient
+// funds, account missing) and the previous rollback already happened.
 func (h *TransactionHandler) publishFailedInNewTx(
 	ctx context.Context,
 	eventID string,
@@ -303,13 +304,13 @@ func (h *TransactionHandler) publishFailedInNewTx(
 func mapErrToReason(err error) (reason, message string) {
 	switch {
 	case errors.Is(err, domain.ErrInsufficientFunds):
-		return "insufficient_funds", "La cuenta de origen no tiene saldo suficiente"
+		return "insufficient_funds", "The source account does not have enough balance"
 	case errors.Is(err, domain.ErrAccountNotFound):
-		return "account_not_found", "Una de las cuentas no existe"
+		return "account_not_found", "One of the accounts does not exist"
 	case errors.Is(err, domain.ErrCurrencyMismatch):
-		return "currency_mismatch", "Las cuentas tienen monedas distintas"
+		return "currency_mismatch", "The accounts have different currencies"
 	case errors.Is(err, domain.ErrSameAccountTransfer):
-		return "same_account", "No se puede transferir a la misma cuenta"
+		return "same_account", "Cannot transfer to the same account"
 	default:
 		return "unknown_error", err.Error()
 	}

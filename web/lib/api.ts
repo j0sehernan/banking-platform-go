@@ -1,6 +1,6 @@
-// Wrapper sobre fetch que captura todas las llamadas en el activity store.
-// Cada llamada del front a los microservicios pasa por acá para que el
-// panel de actividad muestre los detalles en tiempo real.
+// Wrapper over fetch that captures every call into the activity store.
+// Every front call to the microservices goes through here so the
+// activity panel can show the details in real time.
 import { useActivityStore } from './activityStore';
 
 const ACCOUNTS = process.env.NEXT_PUBLIC_ACCOUNTS_API || 'http://localhost:8081';
@@ -17,8 +17,8 @@ export type FetchOptions = RequestInit & {
   body?: BodyInit | null;
 };
 
-// trackedFetch envuelve fetch() para registrar la actividad.
-// Para responses JSON, parsea el body. Para errores, captura el mensaje.
+// trackedFetch wraps fetch() to record activity.
+// For JSON responses, it parses the body. For errors, it captures the message.
 export async function trackedFetch(url: string, options: FetchOptions = {}): Promise<Response> {
   const start = Date.now();
   const method = (options.method || 'GET').toUpperCase();
@@ -35,7 +35,7 @@ export async function trackedFetch(url: string, options: FetchOptions = {}): Pro
 
   const entryId = store.addEntry({
     method,
-    url: url.replace(/^https?:\/\/[^/]+/, ''), // path relativo para el panel
+    url: url.replace(/^https?:\/\/[^/]+/, ''), // path-only for the panel
     status: 'pending',
     requestBody: parsedRequest,
   });
@@ -74,7 +74,7 @@ export async function trackedFetch(url: string, options: FetchOptions = {}): Pro
   }
 }
 
-// ===== helpers tipados para cada API =====
+// ===== typed helpers for each API =====
 
 export type Client = {
   id: string;
