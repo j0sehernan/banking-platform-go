@@ -1,10 +1,10 @@
-# Multi-stage build para Next.js con output: standalone (más liviano).
+# Multi-stage build for Next.js with output: standalone (lighter image).
 
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-# Si no hay lock file, instalamos sin él (es válido en este caso)
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# If no lockfile, install without it (valid in this case)
+RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; else npm install --legacy-peer-deps; fi
 
 FROM node:20-alpine AS builder
 WORKDIR /app

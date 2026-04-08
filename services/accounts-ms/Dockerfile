@@ -14,7 +14,10 @@ COPY services/accounts-ms/ ./services/accounts-ms/
 # Necesito vaciar las refs a otros services del go.work para que no falle
 # (no las necesitamos para compilar accounts-ms)
 RUN cat > go.work <<EOF
-go 1.23
+go 1.23.0
+
+toolchain go1.23.1
+
 use (
     ./pkg
     ./services/accounts-ms

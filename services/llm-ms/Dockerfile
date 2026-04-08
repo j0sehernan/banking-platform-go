@@ -7,7 +7,10 @@ COPY pkg/ ./pkg/
 COPY services/llm-ms/ ./services/llm-ms/
 
 RUN cat > go.work <<EOF
-go 1.23
+go 1.23.0
+
+toolchain go1.23.1
+
 use (
     ./pkg
     ./services/llm-ms
